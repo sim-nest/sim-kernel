@@ -1,0 +1,31 @@
+[package]
+name = "sim-kernel"
+version = "0.1.0"
+edition = "2024"
+license = "MPL-2.0"
+description = "SIM workspace package for sim kernel."
+readme = "README.md"
+publish = true
+repository = "https://github.com/sim-nest/sim-kernel"
+homepage = "https://github.com/sim-nest/sim-kernel"
+
+[workspace]
+resolver = "3"
+members = [
+  "xtask",
+]
+
+[workspace.package]
+edition = "2024"
+license = "MPL-2.0"
+repository = "https://github.com/sim-nest/sim-kernel"
+homepage = "https://github.com/sim-nest/sim-kernel"
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
+
+[dependencies]
+thiserror = "1"
+
+[lints]
+workspace = true
