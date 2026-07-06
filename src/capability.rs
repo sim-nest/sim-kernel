@@ -67,29 +67,46 @@ impl fmt::Display for CapabilityName {
 /// [`Callable::call`]: crate::Callable::call
 #[derive(Debug)]
 pub struct GrantSeat {
-    _private: (),
+    /// The [`Cx`] identity this seat may grant into. `0` is a test-only wildcard
+    /// that matches any context (see [`GrantSeat::for_test`]).
+    ///
+    /// [`Cx`]: crate::Cx
+    cx_id: u64,
 }
 
 impl GrantSeat {
-    pub(crate) fn new() -> Self {
-        Self { _private: () }
+    pub(crate) fn for_cx(cx_id: u64) -> Self {
+        Self { cx_id }
     }
 
-    /// Mints a seat for tests and fixtures. Only available under the
-    /// `test-support` feature; never compiled into a production build.
+    /// Mints a wildcard seat for tests and fixtures (grants into any context).
+    /// Only available under the `test-support` feature; never compiled into a
+    /// production build.
     #[cfg(feature = "test-support")]
     pub fn for_test() -> Self {
-        Self { _private: () }
+        Self { cx_id: 0 }
     }
 
     /// Grants a capability into `cx` under this host authority.
+    ///
+    /// A seat may only grant into the context it was minted with
+    /// ([`Cx::new_seated`]). Minting a fresh `(Cx, GrantSeat)` pair yields a seat
+    /// bound to the fresh context, so it cannot be used to escalate a different
+    /// (e.g. the caller's own) context -- this is what keeps a loaded callable
+    /// from granting itself a capability.
+    ///
+    /// [`Cx::new_seated`]: crate::Cx::new_seated
     pub fn grant(&self, cx: &mut crate::Cx, capability: CapabilityName) {
+        assert!(
+            self.cx_id == 0 || self.cx_id == cx.grant_id(),
+            "a GrantSeat may only grant into the Cx it was minted with"
+        );
         cx.grant_from_host(capability);
     }
 
     /// Grants a capability named by a static string into `cx`.
     pub fn grant_named(&self, cx: &mut crate::Cx, capability: &'static str) {
-        cx.grant_from_host(CapabilityName::new(capability));
+        self.grant(cx, CapabilityName::new(capability));
     }
 }
 
@@ -423,6 +440,23 @@ mod tests {
         assert!(cx.require(&cap).is_err());
         seat.grant(&mut cx, cap.clone());
         assert!(cx.require(&cap).is_ok());
+    }
+
+    #[test]
+    #[should_panic(expected = "minted with")]
+    fn a_seat_cannot_grant_into_a_foreign_cx() {
+        use std::sync::Arc;
+
+        use crate::{Cx, DefaultFactory, NoopEvalPolicy};
+
+        // The escalation a loaded callable would attempt: it holds `victim`
+        // (its own &mut Cx) and mints a fresh throwaway pair, then tries to use
+        // the throwaway seat to grant into `victim`.
+        let (mut victim, _victim_seat) =
+            Cx::new_seated(Arc::new(NoopEvalPolicy), Arc::new(DefaultFactory));
+        let (_throwaway, forged) =
+            Cx::new_seated(Arc::new(NoopEvalPolicy), Arc::new(DefaultFactory));
+        forged.grant(&mut victim, read_eval_capability()); // panics: foreign Cx
     }
 
     #[cfg(feature = "test-support")]

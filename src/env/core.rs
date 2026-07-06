@@ -1,4 +1,10 @@
-use std::{collections::BTreeMap, sync::Arc};
+use std::{
+    collections::BTreeMap,
+    sync::{
+        Arc,
+        atomic::{AtomicU64, Ordering},
+    },
+};
 
 use crate::{
     ContentId,
@@ -23,6 +29,11 @@ use crate::{
 
 use super::{Diagnostics, Env};
 
+/// Monotonic source of per-context grant ids. Only used to bind a [`GrantSeat`]
+/// to the context it was minted with; the value is never observable in output,
+/// so it does not affect evaluation determinism.
+static NEXT_GRANT_ID: AtomicU64 = AtomicU64::new(1);
+
 /// The capability state of a [`Cx`]; an alias for [`CapabilitySet`].
 pub type Capabilities = CapabilitySet;
 
@@ -35,6 +46,11 @@ pub type Capabilities = CapabilitySet;
 /// list/table backends, and so on). See the README sections "Library system"
 /// and "Capabilities and trust".
 pub struct Cx {
+    /// Per-context identity that binds a [`GrantSeat`] to exactly this context.
+    /// Minted at construction; a seat can only grant into the context it shares
+    /// this id with, so minting a fresh `(Cx, GrantSeat)` pair cannot be used to
+    /// escalate a different context.
+    grant_id: u64,
     env: Env,
     diagnostics: Diagnostics,
     capabilities: Capabilities,
@@ -74,6 +90,7 @@ impl Cx {
         facts.insert_boot_claims(&mut datum_store);
 
         Self {
+            grant_id: NEXT_GRANT_ID.fetch_add(1, Ordering::Relaxed),
             env: Env::default(),
             diagnostics: Diagnostics::default(),
             capabilities: Capabilities::default(),
@@ -435,7 +452,14 @@ impl Cx {
     /// loaded behavior cannot grant itself a capability. Use this instead of
     /// [`Cx::new`] wherever the host needs to grant capabilities.
     pub fn new_seated(eval_policy: EvalPolicyRef, factory: Arc<dyn Factory>) -> (Self, GrantSeat) {
-        (Self::new(eval_policy, factory), GrantSeat::new())
+        let cx = Self::new(eval_policy, factory);
+        let seat = GrantSeat::for_cx(cx.grant_id);
+        (cx, seat)
+    }
+
+    /// The identity that binds a [`GrantSeat`] to this context.
+    pub(crate) fn grant_id(&self) -> u64 {
+        self.grant_id
     }
 
     /// Grants a capability into this context under host authority.
