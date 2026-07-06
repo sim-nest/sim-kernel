@@ -1,0 +1,30 @@
+{
+  "generator": "xtask crate-catalog v1",
+  "package_count": 2,
+  "packages": [
+    {
+      "description": "SIM workspace package for sim kernel.",
+      "generated_readme": false,
+      "manifest": "Cargo.toml",
+      "name": "sim-kernel",
+      "publish": "true",
+      "readme": "README.md",
+      "root": ".",
+      "target_kinds": [
+        "lib"
+      ]
+    },
+    {
+      "description": "SIM workspace package for xtask.",
+      "generated_readme": true,
+      "manifest": "xtask/Cargo.toml",
+      "name": "xtask",
+      "publish": "false",
+      "readme": "xtask/README.md",
+      "root": "xtask",
+      "target_kinds": [
+        "bin"
+      ]
+    }
+  ]
+}
