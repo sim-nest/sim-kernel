@@ -448,14 +448,17 @@ impl Cx {
         self.capabilities.insert(capability);
     }
 
-    /// Grants a capability to this context.
-    #[deprecated(note = "grant through a host-held GrantSeat (Cx::new_seated); see REVIEW_12")]
+    /// Grants a capability to this context. TEST-ONLY: available only under the
+    /// `test-support` feature. Production code grants through a host [`GrantSeat`]
+    /// ([`Cx::new_seated`]); a loaded callable has no grant path at all.
+    #[cfg(feature = "test-support")]
     pub fn grant(&mut self, capability: CapabilityName) {
         self.grant_from_host(capability);
     }
 
-    /// Grants a capability named by a static string.
-    #[deprecated(note = "grant through a host-held GrantSeat (Cx::new_seated); see REVIEW_12")]
+    /// Grants a capability named by a static string. TEST-ONLY: available only
+    /// under the `test-support` feature.
+    #[cfg(feature = "test-support")]
     pub fn grant_named(&mut self, capability: &'static str) {
         self.grant_from_host(CapabilityName::new(capability));
     }
