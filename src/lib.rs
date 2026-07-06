@@ -110,7 +110,7 @@ pub mod testing;
 pub mod value;
 pub use callable::Callable;
 pub use capability::{
-    CapabilityName, CapabilitySet, ReadPolicy, TrustLevel, browse_internal_capability,
+    CapabilityName, CapabilitySet, GrantSeat, ReadPolicy, TrustLevel, browse_internal_capability,
     browse_read_capability, browse_run_tests_capability, config_list_impl_capability,
     config_table_impl_capability, eval_fabric_capability, eval_remote_capability,
     fact_private_capability, list_force_unbounded_capability, logic_consult_file_capability,

@@ -369,7 +369,7 @@ fn k6_17_adapters_resolve_for_newly_deprecated_accessor_families() {
 #[test]
 fn k6_17_adapters_invoke_legacy_protocols_without_new_object_methods() {
     let mut cx = Cx::stub();
-    cx.grant(read_construct_capability());
+    cx.grant_from_host(read_construct_capability());
 
     let class = cx
         .factory()

@@ -51,6 +51,48 @@ impl fmt::Display for CapabilityName {
     }
 }
 
+/// A host-only capability-grant seat: the authority to grant a capability into a
+/// [`Cx`].
+///
+/// A `GrantSeat` is minted ONLY when a context is constructed
+/// ([`Cx::new_seated`]) or, under the `test-support` feature, by
+/// `GrantSeat::for_test`. It has no public constructor otherwise, so it cannot
+/// be forged. Crucially, it is never passed into [`Callable::call`] -- a loaded
+/// callable receives a `&mut Cx` but no seat, so it cannot grant itself a
+/// capability. Host code (a bootloader, a server session, a loader) holds the
+/// seat and grants through it.
+///
+/// [`Cx`]: crate::Cx
+/// [`Cx::new_seated`]: crate::Cx::new_seated
+/// [`Callable::call`]: crate::Callable::call
+#[derive(Debug)]
+pub struct GrantSeat {
+    _private: (),
+}
+
+impl GrantSeat {
+    pub(crate) fn new() -> Self {
+        Self { _private: () }
+    }
+
+    /// Mints a seat for tests and fixtures. Only available under the
+    /// `test-support` feature; never compiled into a production build.
+    #[cfg(feature = "test-support")]
+    pub fn for_test() -> Self {
+        Self { _private: () }
+    }
+
+    /// Grants a capability into `cx` under this host authority.
+    pub fn grant(&self, cx: &mut crate::Cx, capability: CapabilityName) {
+        cx.grant_from_host(capability);
+    }
+
+    /// Grants a capability named by a static string into `cx`.
+    pub fn grant_named(&self, cx: &mut crate::Cx, capability: &'static str) {
+        cx.grant_from_host(CapabilityName::new(capability));
+    }
+}
+
 /// A set of granted capabilities, used as the capability state of a [`Cx`].
 ///
 /// [`Cx`]: crate::Cx
@@ -367,5 +409,26 @@ mod tests {
         policy(TrustLevel::Untrusted, &[read_construct_capability()])
             .require(&read_construct_capability())
             .unwrap();
+    }
+
+    #[test]
+    fn grant_seat_grants_a_capability_into_a_cx() {
+        use std::sync::Arc;
+
+        use crate::{Cx, DefaultFactory, NoopEvalPolicy};
+
+        let cap = read_eval_capability();
+        let (mut cx, seat) = Cx::new_seated(Arc::new(NoopEvalPolicy), Arc::new(DefaultFactory));
+        // A freshly seated context grants nothing until the host uses the seat.
+        assert!(cx.require(&cap).is_err());
+        seat.grant(&mut cx, cap.clone());
+        assert!(cx.require(&cap).is_ok());
+    }
+
+    #[cfg(feature = "test-support")]
+    #[test]
+    fn grant_seat_for_test_is_available_under_the_feature() {
+        // Compiles and runs only when `test-support` is enabled.
+        let _seat = super::GrantSeat::for_test();
     }
 }

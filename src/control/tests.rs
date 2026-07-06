@@ -15,7 +15,7 @@ fn symbol_ref(namespace: &str, name: &str) -> Ref {
 #[test]
 fn prompt_body_can_return_normally() {
     let mut cx = cx();
-    cx.grant(control_prompt_capability());
+    cx.grant_from_host(control_prompt_capability());
     let expected = symbol_ref("test", "prompt-result");
 
     let actual = prompt(
@@ -61,7 +61,7 @@ fn capture_without_capability_is_denied() {
 #[test]
 fn noop_policy_returns_structured_unsupported_result() {
     let mut cx = cx();
-    cx.grant(control_capture_capability());
+    cx.grant_from_host(control_capture_capability());
 
     let result = capture(
         &mut cx,
@@ -88,7 +88,7 @@ fn noop_policy_returns_structured_unsupported_result() {
 #[test]
 fn multishot_capture_requires_multishot_capability() {
     let mut cx = cx();
-    cx.grant(control_capture_capability());
+    cx.grant_from_host(control_capture_capability());
 
     let err = capture(
         &mut cx,

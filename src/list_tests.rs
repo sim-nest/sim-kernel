@@ -122,7 +122,7 @@ fn force_bound_is_bounded_by_default() {
 #[test]
 fn force_bound_becomes_unbounded_with_capability() {
     let mut cx = Cx::stub();
-    cx.grant(list_force_unbounded_capability());
+    cx.grant_from_host(list_force_unbounded_capability());
     assert_eq!(force_list_bound(&mut cx), None);
 }
 
@@ -141,7 +141,7 @@ fn bounded_force_rejects_oversized_list_without_materializing_it() {
 #[test]
 fn unbounded_force_capability_allows_materialization() {
     let mut cx = Cx::stub();
-    cx.grant(list_force_unbounded_capability());
+    cx.grant_from_host(list_force_unbounded_capability());
     let list = GuardList::new(Ordering::Greater);
 
     let values = force_list_to_vec(&mut cx, &list, "encode").unwrap();

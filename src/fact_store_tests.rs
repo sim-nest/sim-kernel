@@ -62,7 +62,7 @@ fn private_claim_requires_private_fact_capability_and_is_hidden_normally() {
     let denied = cx.insert_fact(claim.clone()).unwrap_err();
     assert!(matches!(denied, Error::CapabilityDenied { .. }));
 
-    cx.grant(fact_private_capability());
+    cx.grant_from_host(fact_private_capability());
     cx.insert_fact(claim.clone()).unwrap();
     assert_eq!(cx.query_facts(exact_for(&claim)).unwrap().len(), 1);
 
@@ -85,7 +85,7 @@ fn capability_gated_claim_is_hidden_without_capability() {
 
     assert!(cx.query_facts(exact_for(&claim)).unwrap().is_empty());
 
-    cx.grant(capability);
+    cx.grant_from_host(capability);
     assert_eq!(cx.query_facts(exact_for(&claim)).unwrap().len(), 1);
 }
 

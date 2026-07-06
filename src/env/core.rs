@@ -2,7 +2,7 @@ use std::{collections::BTreeMap, sync::Arc};
 
 use crate::{
     ContentId,
-    capability::{CapabilityName, CapabilitySet, read_construct_capability},
+    capability::{CapabilityName, CapabilitySet, GrantSeat, read_construct_capability},
     control::{ControlPolicy, ControlPolicyRef, NoopControlPolicy},
     datum_store::BTreeDatumStore,
     effect_ledger::EffectLedger,
@@ -428,14 +428,36 @@ impl Cx {
         self.diagnostics.push_info(message);
     }
 
-    /// Grants a capability to this context.
-    pub fn grant(&mut self, capability: CapabilityName) {
+    /// Constructs a context together with its host [`GrantSeat`].
+    ///
+    /// The caller (a bootloader, a server session, a loader) keeps the seat and
+    /// grants capabilities through it. The seat is never handed to a callable, so
+    /// loaded behavior cannot grant itself a capability. Use this instead of
+    /// [`Cx::new`] wherever the host needs to grant capabilities.
+    pub fn new_seated(eval_policy: EvalPolicyRef, factory: Arc<dyn Factory>) -> (Self, GrantSeat) {
+        (Self::new(eval_policy, factory), GrantSeat::new())
+    }
+
+    /// Grants a capability into this context under host authority.
+    ///
+    /// This is the single internal insert point; the only ways to reach it are a
+    /// host-held [`GrantSeat`] (production) or the `test-support` grant methods
+    /// (tests). A loaded callable holds a `&mut Cx` but no seat, so it cannot
+    /// grant itself a capability.
+    pub(crate) fn grant_from_host(&mut self, capability: CapabilityName) {
         self.capabilities.insert(capability);
     }
 
+    /// Grants a capability to this context.
+    #[deprecated(note = "grant through a host-held GrantSeat (Cx::new_seated); see REVIEW_12")]
+    pub fn grant(&mut self, capability: CapabilityName) {
+        self.grant_from_host(capability);
+    }
+
     /// Grants a capability named by a static string.
+    #[deprecated(note = "grant through a host-held GrantSeat (Cx::new_seated); see REVIEW_12")]
     pub fn grant_named(&mut self, capability: &'static str) {
-        self.capabilities.insert(CapabilityName::new(capability));
+        self.grant_from_host(CapabilityName::new(capability));
     }
 
     /// Returns the granted capability set.

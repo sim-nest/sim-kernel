@@ -143,7 +143,7 @@ fn live_handle_satisfaction_claim_is_private_by_default() {
 
     assert!(matches!(report.target, Ref::Handle(_)));
     assert!(cx.query_facts(pattern.clone()).unwrap().is_empty());
-    cx.grant(fact_private_capability());
+    cx.grant_from_host(fact_private_capability());
     let claims = cx.query_facts(pattern).unwrap();
     assert_eq!(claims.len(), 1);
     assert_eq!(claims[0].visibility, Visibility::Private);

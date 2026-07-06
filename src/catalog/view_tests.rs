@@ -13,7 +13,7 @@ fn catalog_view_lists_registry_tables_opens_exports_and_shows_rows() {
     cx.registry_mut()
         .register_value(symbol.clone(), value)
         .unwrap();
-    cx.grant(registry_catalog_read_capability());
+    cx.grant_from_host(registry_catalog_read_capability());
 
     let root = registry_catalog_view(&mut cx).unwrap();
     let root_table = root.object().as_table_impl().unwrap();
@@ -87,7 +87,7 @@ fn catalog_view_mutations_fail_closed_and_typed_lookups_stay_unchanged() {
             if capability == registry_catalog_read_capability()
     ));
 
-    cx.grant(registry_catalog_read_capability());
+    cx.grant_from_host(registry_catalog_read_capability());
     let root = registry_catalog_view(&mut cx).unwrap();
     assert_eq!(cx.registry().value_by_symbol(&symbol), Some(&value));
 

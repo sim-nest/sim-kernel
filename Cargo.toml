@@ -24,6 +24,12 @@ homepage = "https://github.com/sim-nest/sim-kernel"
 [workspace.lints.rust]
 unsafe_code = "forbid"
 
+[features]
+# Re-exposes the ambient `Cx::grant`/`grant_named` for test/fixture setup only.
+# Never enable in a production dependency: in a default build the sole capability
+# grant path is a host-held `GrantSeat` (see REVIEW_12).
+test-support = []
+
 [dependencies]
 thiserror = "1"
 
