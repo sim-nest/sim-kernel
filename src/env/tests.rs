@@ -460,3 +460,42 @@ fn number_reduction_dispatch_applies_only_the_winning_rule_once() {
     assert_eq!(HIGH_COST_BINARY_APPLIES.load(Ordering::SeqCst), 0);
     assert_eq!(WINNING_REDUCTION_APPLIES.load(Ordering::SeqCst), 1);
 }
+
+#[test]
+fn fork_from_seed_reproduces_capabilities_and_copied_content() {
+    use crate::{CapabilityName, DefaultFactory, NoopEvalPolicy, capability::GrantSeat};
+
+    let (mut seed, seat): (Cx, GrantSeat) =
+        Cx::new_seated(Arc::new(NoopEvalPolicy), Arc::new(DefaultFactory));
+
+    // A capability granted through the seed's host seat.
+    let cap = CapabilityName::new("fork-test-cap");
+    seat.grant(&mut seed, cap.clone());
+
+    // Some copied env content and copied registry content.
+    let binding = Symbol::qualified("fork", "binding-test");
+    let bound_value = opaque_number(&seed, "fork-env-test", 7);
+    seed.env_mut().define(binding.clone(), bound_value);
+    let domain = Symbol::qualified("numbers", "fork-domain-test");
+    register_test_domain(&mut seed, "fork-domain-test");
+
+    let fork = seed.fork_from_seed();
+
+    // The fork carries the same granted capabilities as its seed.
+    assert!(fork.require(&cap).is_ok());
+    assert_eq!(fork.capabilities(), seed.capabilities());
+
+    // The fork shares the copied env content.
+    let forked_binding = fork.env().get(&binding).expect("env binding copied");
+    assert_eq!(
+        forked_binding
+            .object()
+            .downcast_ref::<super::test_support::OpaqueNumber>()
+            .unwrap()
+            .value,
+        7
+    );
+
+    // The fork shares the copied registry content.
+    assert!(fork.resolve_number_domain(&domain).is_ok());
+}

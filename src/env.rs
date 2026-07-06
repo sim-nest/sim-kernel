@@ -6,6 +6,7 @@
 
 mod base;
 mod core;
+mod fork;
 mod numbers;
 mod promotion;
 mod selection;

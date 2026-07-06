@@ -326,4 +326,27 @@ impl Error {
             message: message.into(),
         }
     }
+
+    /// Wraps a host [`std::io::Error`] into an [`Error::HostError`].
+    ///
+    /// This is a named constructor, deliberately not a blanket `From` impl, so
+    /// that every host-IO-to-kernel conversion stays explicit at the call site.
+    pub fn host_io(err: std::io::Error) -> Self {
+        Self::HostError(err.to_string())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Error;
+
+    #[test]
+    fn host_io_wraps_an_io_error_into_host_error() {
+        let io = std::io::Error::new(std::io::ErrorKind::NotFound, "no such file");
+        let error = Error::host_io(io);
+        match error {
+            Error::HostError(message) => assert_eq!(message, "no such file"),
+            other => panic!("expected HostError, got {other:?}"),
+        }
+    }
 }
