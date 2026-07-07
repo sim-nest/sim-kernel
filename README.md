@@ -1,6 +1,34 @@
 # sim-kernel
 
-`sim-kernel` is the small protocol kernel of the SIM constellation.
+`sim-kernel` is the small protocol kernel of the SIM constellation: the contract
+layer that defines the shared type vocabulary, trait contracts, identity/storage
+substrate, and transport framing that every SIM library and host plugs into.
+
+New to SIM? You probably want to run it first -- see sim-run (the `sim` command,
+`cargo install sim-run`) and sim-say for the tour. This repo is the kernel: the
+small contract layer everything else plugs into, not something you run directly.
+
+## Smallest example
+
+The kernel's most basic type is `Symbol`, a name with an optional namespace:
+
+```bash
+cargo add sim-kernel
+```
+
+```rust
+use sim_kernel::id::Symbol;
+
+let plain = Symbol::new("car");
+assert_eq!(plain.as_qualified_str(), "car");
+
+let qualified = Symbol::qualified("core", "Bool");
+assert_eq!(qualified.as_qualified_str(), "core/Bool");
+```
+
+This is a verbatim passing doctest (`src/id.rs:146`); it asserts the qualified
+rendering rather than printing output. Every first-reach kernel type carries a
+similar `# Examples` doctest -- those are the authoritative usage references.
 
 SIM is an expandable Rust runtime: the kernel defines contracts, and loadable
 libraries provide behavior. The kernel is a protocol surface, not a closed
