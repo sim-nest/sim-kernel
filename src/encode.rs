@@ -4,6 +4,7 @@
 //! contract; concrete codecs that render forms live in library crates.
 
 use crate::{
+    capability::CapabilityName,
     env::Cx,
     error::Result,
     expr::Expr,
@@ -49,12 +50,21 @@ pub enum ReadConstructEncodePolicy {
 }
 
 /// Whether read-eval output may be emitted.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum ReadEvalEncodePolicy {
     /// Forbid read-eval output.
     Forbid,
-    /// Allow broad read-eval output.
-    AllowBroad,
+    /// Allow only explicitly declared read-eval output.
+    ///
+    /// The shape and capability fields describe the expected admitted result and
+    /// maximum powers for the eval body. Codecs must not treat this as a broad
+    /// permission to emit arbitrary read-eval syntax.
+    AllowExplicit {
+        /// Shape symbol the evaluated result must satisfy.
+        expected_shape: Symbol,
+        /// Maximum capabilities the emitted eval body may request.
+        allowed_capabilities: Vec<CapabilityName>,
+    },
 }
 
 /// Whether output is canonicalized or preserves the original input form.
@@ -113,6 +123,41 @@ impl<'a> WriteCx<'a> {
             codec: self.codec,
             options,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{EncodeOptions, ReadEvalEncodePolicy};
+    use crate::{CapabilityName, Symbol, read_eval_capability};
+
+    #[test]
+    fn default_options_forbid_read_eval_output() {
+        assert_eq!(
+            EncodeOptions::default().read_eval,
+            ReadEvalEncodePolicy::Forbid
+        );
+    }
+
+    #[test]
+    fn explicit_read_eval_policy_carries_shape_and_caps() {
+        let policy = ReadEvalEncodePolicy::AllowExplicit {
+            expected_shape: Symbol::qualified("core", "Number"),
+            allowed_capabilities: vec![read_eval_capability(), CapabilityName::new("secret/env")],
+        };
+
+        let ReadEvalEncodePolicy::AllowExplicit {
+            expected_shape,
+            allowed_capabilities,
+        } = policy
+        else {
+            panic!("expected explicit read-eval policy");
+        };
+        assert_eq!(expected_shape, Symbol::qualified("core", "Number"));
+        assert_eq!(
+            allowed_capabilities,
+            vec![read_eval_capability(), CapabilityName::new("secret/env")]
+        );
     }
 }
 
