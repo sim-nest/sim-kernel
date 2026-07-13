@@ -344,7 +344,10 @@ capability is granted. Kernel capability tokens include `read-construct`,
 family, the runtime-storage gates (`config.list.impl`, `config.table.impl`,
 `list.force.unbounded`, `table.remote`), and the `logic.*` library gates.
 Capabilities are ordinary, inspectable runtime data, not static strings, and
-must be checked before privileged operations.
+must be checked before privileged operations. `CapabilitySet::intersect` and
+`diminish(current, allowed)` compute monotone subsets for explicit narrowed
+runs: the result contains only capabilities present in both inputs and never
+adds authority the caller did not already hold.
 
 ### Stable ids and ABI transport
 

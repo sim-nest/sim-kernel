@@ -149,10 +149,30 @@ impl CapabilitySet {
         self.granted.contains(capability)
     }
 
+    /// Returns the capabilities present in both sets.
+    ///
+    /// Monotone: the result is a subset of each input, so using it as an active
+    /// capability set can only narrow authority, never widen it.
+    pub fn intersect(&self, other: &CapabilitySet) -> CapabilitySet {
+        self.iter()
+            .filter(|capability| other.contains(capability))
+            .cloned()
+            .fold(CapabilitySet::new(), CapabilitySet::grant)
+    }
+
     /// Iterates the granted capabilities in sorted order.
     pub fn iter(&self) -> impl Iterator<Item = &CapabilityName> {
         self.granted.iter()
     }
+}
+
+/// Computes the diminished capability set for an explicitly narrowed run.
+///
+/// The result contains exactly the capabilities the caller already holds and
+/// the request explicitly allows. It is therefore a subset of both inputs and
+/// never grants a capability absent from `current`.
+pub fn diminish(current: &CapabilitySet, allowed: &CapabilitySet) -> CapabilitySet {
+    current.intersect(allowed)
 }
 
 /// The trust level of a source, gating capabilities beyond mere possession.
@@ -386,9 +406,18 @@ pub fn registry_catalog_read_capability() -> CapabilityName {
 #[cfg(test)]
 mod tests {
     use super::{
-        CapabilitySet, ReadPolicy, TrustLevel, read_construct_capability, read_eval_capability,
+        CapabilityName, CapabilitySet, ReadPolicy, TrustLevel, diminish, read_construct_capability,
+        read_eval_capability,
     };
     use crate::Error;
+
+    fn named_set(names: &[&str]) -> CapabilitySet {
+        names
+            .iter()
+            .copied()
+            .map(CapabilityName::new)
+            .fold(CapabilitySet::new(), CapabilitySet::grant)
+    }
 
     fn policy(trust: TrustLevel, capabilities: &[crate::CapabilityName]) -> ReadPolicy {
         ReadPolicy {
@@ -400,6 +429,56 @@ mod tests {
                     set.grant(capability)
                 }),
         }
+    }
+
+    fn mask_set(universe: &[&str], mask: usize) -> CapabilitySet {
+        universe
+            .iter()
+            .enumerate()
+            .filter_map(|(index, name)| ((mask & (1 << index)) != 0).then_some(*name))
+            .map(CapabilityName::new)
+            .fold(CapabilitySet::new(), CapabilitySet::grant)
+    }
+
+    fn assert_subset(subset: &CapabilitySet, superset: &CapabilitySet) {
+        for capability in subset.iter() {
+            assert!(
+                superset.contains(capability),
+                "{capability} must be present in the superset"
+            );
+        }
+    }
+
+    #[test]
+    fn diminish_is_subset_of_current_and_allowed_for_small_sets() {
+        let universe = ["read-construct", "read-eval", "eval.fabric", "table.remote"];
+        for current_mask in 0..(1 << universe.len()) {
+            for allowed_mask in 0..(1 << universe.len()) {
+                let current = mask_set(&universe, current_mask);
+                let allowed = mask_set(&universe, allowed_mask);
+                let diminished = diminish(&current, &allowed);
+                assert_subset(&diminished, &current);
+                assert_subset(&diminished, &allowed);
+
+                for name in universe {
+                    let capability = CapabilityName::new(name);
+                    assert_eq!(
+                        diminished.contains(&capability),
+                        current.contains(&capability) && allowed.contains(&capability),
+                        "{name} membership should be exact set intersection"
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn diminish_never_adds_a_capability_from_allowed_only() {
+        let current = named_set(&["read-construct"]);
+        let allowed = named_set(&["read-construct", "read-eval"]);
+        let diminished = diminish(&current, &allowed);
+        assert!(diminished.contains(&read_construct_capability()));
+        assert!(!diminished.contains(&read_eval_capability()));
     }
 
     #[test]
