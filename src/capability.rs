@@ -1,8 +1,8 @@
 //! Capability names and sets: the contract for gating privileged operations.
 //!
-//! The kernel defines capability identity, trust levels, and read policy plus
-//! the well-known core capability names; libraries decide what each capability
-//! authorizes.
+//! The kernel defines capability identity, trust levels, read policy, and
+//! cross-cutting kernel capability names. Libraries mint behavior-specific
+//! capability names with [`CapabilityName::new`] in their own crates.
 
 use std::{collections::BTreeSet, fmt, sync::Arc};
 
@@ -298,104 +298,9 @@ pub fn fact_private_capability() -> CapabilityName {
     CapabilityName::new("kernel.fact.private")
 }
 
-/// The capability gating browse reads (`browse.read`).
-pub fn browse_read_capability() -> CapabilityName {
-    CapabilityName::new("browse.read")
-}
-
-/// The capability gating browse-driven test runs (`browse.run-tests`).
-pub fn browse_run_tests_capability() -> CapabilityName {
-    CapabilityName::new("browse.run-tests")
-}
-
-/// The capability gating internal browse surfaces (`browse.internal`).
-pub fn browse_internal_capability() -> CapabilityName {
-    CapabilityName::new("browse.internal")
-}
-
-/// The capability gating logic-database writes (`logic.db.write`).
-pub fn logic_db_write_capability() -> CapabilityName {
-    CapabilityName::new("logic.db.write")
-}
-
-/// The capability gating logic file consulting (`logic.consult.file`).
-pub fn logic_consult_file_capability() -> CapabilityName {
-    CapabilityName::new("logic.consult.file")
-}
-
-/// The capability gating logic tool calls (`logic.tool-call`).
-pub fn logic_tool_call_capability() -> CapabilityName {
-    CapabilityName::new("logic.tool-call")
-}
-
-/// The capability gating the configured list implementation (`config.list.impl`).
-pub fn config_list_impl_capability() -> CapabilityName {
-    CapabilityName::new("config.list.impl")
-}
-
-/// The capability gating the configured table implementation (`config.table.impl`).
-pub fn config_table_impl_capability() -> CapabilityName {
-    CapabilityName::new("config.table.impl")
-}
-
 /// The capability gating unbounded list forcing (`list.force.unbounded`).
 pub fn list_force_unbounded_capability() -> CapabilityName {
     CapabilityName::new("list.force.unbounded")
-}
-
-/// The capability gating filesystem-backed tables (`table.fs`).
-pub fn table_fs_capability() -> CapabilityName {
-    CapabilityName::new("table.fs")
-}
-
-/// The capability gating filesystem table reads (`table.fs.read`).
-pub fn table_fs_read_capability() -> CapabilityName {
-    CapabilityName::new("table.fs.read")
-}
-
-/// The capability gating filesystem table writes (`table.fs.write`).
-pub fn table_fs_write_capability() -> CapabilityName {
-    CapabilityName::new("table.fs.write")
-}
-
-/// The capability gating filesystem table directory creation (`table.fs.mkdir`).
-pub fn table_fs_mkdir_capability() -> CapabilityName {
-    CapabilityName::new("table.fs.mkdir")
-}
-
-/// The capability gating filesystem table directory removal (`table.fs.rmdir`).
-pub fn table_fs_rmdir_capability() -> CapabilityName {
-    CapabilityName::new("table.fs.rmdir")
-}
-
-/// The capability gating database-backed tables (`table.db`).
-pub fn table_db_capability() -> CapabilityName {
-    CapabilityName::new("table.db")
-}
-
-/// The capability gating database table reads (`table.db.read`).
-pub fn table_db_read_capability() -> CapabilityName {
-    CapabilityName::new("table.db.read")
-}
-
-/// The capability gating database table writes (`table.db.write`).
-pub fn table_db_write_capability() -> CapabilityName {
-    CapabilityName::new("table.db.write")
-}
-
-/// The capability gating database table directory creation (`table.db.mkdir`).
-pub fn table_db_mkdir_capability() -> CapabilityName {
-    CapabilityName::new("table.db.mkdir")
-}
-
-/// The capability gating database table directory removal (`table.db.rmdir`).
-pub fn table_db_rmdir_capability() -> CapabilityName {
-    CapabilityName::new("table.db.rmdir")
-}
-
-/// The capability gating remote tables (`table.remote`).
-pub fn table_remote_capability() -> CapabilityName {
-    CapabilityName::new("table.remote")
 }
 
 /// The capability gating registry catalog reads (`registry.catalog.read`).
@@ -451,7 +356,7 @@ mod tests {
 
     #[test]
     fn diminish_is_subset_of_current_and_allowed_for_small_sets() {
-        let universe = ["read-construct", "read-eval", "eval.fabric", "table.remote"];
+        let universe = ["read-construct", "read-eval", "eval.fabric", "eval.remote"];
         for current_mask in 0..(1 << universe.len()) {
             for allowed_mask in 0..(1 << universe.len()) {
                 let current = mask_set(&universe, current_mask);

@@ -110,14 +110,11 @@ pub mod testing;
 pub mod value;
 pub use callable::Callable;
 pub use capability::{
-    CapabilityName, CapabilitySet, GrantSeat, ReadPolicy, TrustLevel, browse_internal_capability,
-    browse_read_capability, browse_run_tests_capability, config_list_impl_capability,
-    config_table_impl_capability, diminish, eval_fabric_capability, eval_remote_capability,
-    fact_private_capability, list_force_unbounded_capability, logic_consult_file_capability,
-    logic_db_write_capability, logic_tool_call_capability, macro_expand_capability,
-    macro_expand_compile_capability, macro_expand_eval_capability, macro_expand_read_capability,
-    native_dynamic_load_capability, read_construct_capability, read_eval_capability,
-    registry_catalog_read_capability, table_remote_capability,
+    CapabilityName, CapabilitySet, GrantSeat, ReadPolicy, TrustLevel, diminish,
+    eval_fabric_capability, eval_remote_capability, fact_private_capability,
+    list_force_unbounded_capability, macro_expand_capability, macro_expand_compile_capability,
+    macro_expand_eval_capability, macro_expand_read_capability, native_dynamic_load_capability,
+    read_construct_capability, read_eval_capability, registry_catalog_read_capability,
 };
 pub use claim::{Claim, ClaimKind, ClaimPattern, Visibility};
 pub use class::{Class, class_is_subclass_of};
