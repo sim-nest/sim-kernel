@@ -290,6 +290,10 @@ fn export_site_value_registered_through_linker_is_queryable_by_symbol_and_id() {
     assert_eq!(registry.site_value(site_id), Some(&site_value));
     assert_eq!(registry.site_by_symbol(&site_symbol), Some(&site_value));
     assert_eq!(
+        registry.export_symbol_for_value(&site_value),
+        Some(site_symbol.clone())
+    );
+    assert_eq!(
         registry
             .export_symbols()
             .get(&ExportKind::named(ExportKind::SITE))

@@ -390,6 +390,14 @@ impl Registry {
                     })
             })
             .or_else(|| {
+                self.site_symbol_cache.iter().find_map(|(symbol, id)| {
+                    self.site_value_cache
+                        .get(id)
+                        .filter(|candidate| *candidate == value)
+                        .map(|_| symbol.clone())
+                })
+            })
+            .or_else(|| {
                 self.plain_value_cache
                     .iter()
                     .find_map(|(symbol, candidate)| (candidate == value).then(|| symbol.clone()))

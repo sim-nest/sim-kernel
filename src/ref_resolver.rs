@@ -131,9 +131,11 @@ fn value_from_symbol(cx: &Cx, symbol: &Symbol) -> Option<Value> {
         .value_by_symbol(symbol)
         .or_else(|| cx.registry().function_by_symbol(symbol))
         .or_else(|| cx.registry().class_by_symbol(symbol))
+        .or_else(|| cx.registry().macro_by_symbol(symbol))
         .or_else(|| cx.registry().shape_by_symbol(symbol))
         .or_else(|| cx.registry().codec_by_symbol(symbol))
         .or_else(|| cx.registry().number_domain_by_symbol(symbol))
+        .or_else(|| cx.registry().site_by_symbol(symbol))
         .cloned()
 }
 
@@ -199,6 +201,40 @@ mod tests {
         let reference = resolver.ref_for_value(&mut cx, &value).unwrap();
 
         assert_eq!(reference, Ref::Symbol(symbol));
+    }
+
+    #[test]
+    fn macro_export_round_trips_through_symbol_ref() {
+        let mut cx = cx();
+        let symbol = Symbol::qualified("macro", "fixture");
+        let value = cx.factory().bool(true).unwrap();
+        cx.registry_mut()
+            .register_macro_value(symbol.clone(), value.clone())
+            .unwrap();
+        let mut resolver = TemporaryRefResolver::new();
+
+        let reference = resolver.ref_for_value(&mut cx, &value).unwrap();
+        let resolved = value_from_ref(&mut cx, &reference).unwrap();
+
+        assert_eq!(reference, Ref::Symbol(symbol));
+        assert_eq!(resolved, value);
+    }
+
+    #[test]
+    fn site_export_round_trips_through_symbol_ref() {
+        let mut cx = cx();
+        let symbol = Symbol::qualified("model", "local");
+        let value = cx.factory().bool(true).unwrap();
+        cx.registry_mut()
+            .register_site_value(symbol.clone(), value.clone())
+            .unwrap();
+        let mut resolver = TemporaryRefResolver::new();
+
+        let reference = resolver.ref_for_value(&mut cx, &value).unwrap();
+        let resolved = value_from_ref(&mut cx, &reference).unwrap();
+
+        assert_eq!(reference, Ref::Symbol(symbol));
+        assert_eq!(resolved, value);
     }
 
     #[test]
