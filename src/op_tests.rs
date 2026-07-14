@@ -163,6 +163,99 @@ fn missing_capability_prevents_op_implementation_from_running() {
 }
 
 #[test]
+fn missing_args_shape_prevents_op_implementation_from_running() {
+    let mut cx = Cx::stub();
+    let calls = Arc::new(AtomicUsize::new(0));
+    let key = OpKey::new(Symbol::new("test"), Symbol::new("count"), 1);
+    let missing = qsym("test", "MissingShape");
+    let target = cx
+        .factory()
+        .opaque(Arc::new(OpObject {
+            op: CountingOp {
+                spec: OpSpec::new(
+                    key.clone(),
+                    core_any_ref(),
+                    Ref::Symbol(missing.clone()),
+                    core_any_ref(),
+                ),
+                calls: calls.clone(),
+            },
+        }))
+        .unwrap();
+    let input = cx.factory().bool(true).unwrap();
+
+    let err = invoke_op(&mut cx, target, &key, input).unwrap_err();
+
+    assert!(matches!(err, Error::UnknownSymbol { symbol } if symbol == missing));
+    assert_eq!(calls.load(Ordering::SeqCst), 0);
+}
+
+#[test]
+fn non_shape_args_shape_prevents_op_implementation_from_running() {
+    let mut cx = Cx::stub();
+    let calls = Arc::new(AtomicUsize::new(0));
+    let key = OpKey::new(Symbol::new("test"), Symbol::new("count"), 1);
+    let non_shape = qsym("test", "NonShape");
+    let value = cx.factory().bool(true).unwrap();
+    cx.registry_mut()
+        .register_shape_value(non_shape.clone(), value)
+        .unwrap();
+    let target = cx
+        .factory()
+        .opaque(Arc::new(OpObject {
+            op: CountingOp {
+                spec: OpSpec::new(
+                    key.clone(),
+                    core_any_ref(),
+                    Ref::Symbol(non_shape),
+                    core_any_ref(),
+                ),
+                calls: calls.clone(),
+            },
+        }))
+        .unwrap();
+    let input = cx.factory().bool(true).unwrap();
+
+    let err = invoke_op(&mut cx, target, &key, input).unwrap_err();
+
+    assert!(matches!(
+        err,
+        Error::TypeMismatch {
+            expected: "shape",
+            found: "non-shape"
+        }
+    ));
+    assert_eq!(calls.load(Ordering::SeqCst), 0);
+}
+
+#[test]
+fn core_any_shape_args_shape_allows_op_implementation_to_run() {
+    let mut cx = Cx::stub();
+    let calls = Arc::new(AtomicUsize::new(0));
+    let key = OpKey::new(Symbol::new("test"), Symbol::new("count"), 1);
+    let target = cx
+        .factory()
+        .opaque(Arc::new(OpObject {
+            op: CountingOp {
+                spec: OpSpec::new(
+                    key.clone(),
+                    core_any_ref(),
+                    Ref::Symbol(qsym("core", "AnyShape")),
+                    core_any_ref(),
+                ),
+                calls: calls.clone(),
+            },
+        }))
+        .unwrap();
+    let input = cx.factory().bool(true).unwrap();
+
+    let step = invoke_op(&mut cx, target, &key, input.clone()).unwrap();
+
+    assert_eq!(calls.load(Ordering::SeqCst), 1);
+    assert!(matches!(step, Step::Value(value) if value == input));
+}
+
+#[test]
 fn current_shape_checks_through_invoke_op() {
     let mut cx = Cx::stub();
     let target = cx

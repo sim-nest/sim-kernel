@@ -165,11 +165,12 @@ pub fn resolve_op<'a>(cx: &mut Cx, target: &'a Value, key: &OpKey) -> Result<Res
     })
 }
 
-/// Checks `input` against a shape reference, passing silently when the shape is
-/// `Any` or not registered.
+/// Checks `input` against a shape reference, passing silently only when the
+/// shape reference is non-symbolic or explicitly accepts anything.
 ///
-/// Used by [`invoke_op`] to validate operation arguments; an unresolved or
-/// any-matching shape is treated as accepting all input.
+/// Used by [`invoke_op`] to validate operation arguments; a missing symbolic
+/// shape is an unknown symbol, and a registered non-shape value is a type
+/// mismatch.
 pub fn check_shape_if_available(cx: &mut Cx, shape_ref: Ref, input: Value) -> Result<()> {
     let Ref::Symbol(symbol) = shape_ref else {
         return Ok(());
@@ -178,12 +179,17 @@ pub fn check_shape_if_available(cx: &mut Cx, shape_ref: Ref, input: Value) -> Re
         return Ok(());
     }
 
-    let Some(shape_value) = cx.registry().shape_by_symbol(&symbol).cloned() else {
-        return Ok(());
-    };
-    let Some(shape) = shape_value.object().as_shape() else {
-        return Ok(());
-    };
+    let shape_value = cx
+        .registry()
+        .shape_by_symbol(&symbol)
+        .cloned()
+        .ok_or_else(|| Error::UnknownSymbol {
+            symbol: symbol.clone(),
+        })?;
+    let shape = shape_value.object().as_shape().ok_or(Error::TypeMismatch {
+        expected: "shape",
+        found: "non-shape",
+    })?;
     let matched = shape.check_value(cx, input)?;
     if matched.accepted {
         Ok(())
