@@ -1,9 +1,6 @@
-use std::{
-    collections::BTreeMap,
-    sync::{
-        Arc,
-        atomic::{AtomicU64, Ordering},
-    },
+use std::sync::{
+    Arc,
+    atomic::{AtomicU64, Ordering},
 };
 
 use crate::{
@@ -27,7 +24,7 @@ use crate::{
     value::Value,
 };
 
-use super::{Diagnostics, Env};
+use super::{Diagnostics, Env, load_ledger::LibLoadLedger};
 
 /// Monotonic source of per-context grant ids. Only used to bind a [`GrantSeat`]
 /// to the context it was minted with; the value is never observable in output,
@@ -38,6 +35,23 @@ fn unknown_symbol(symbol: &Symbol) -> Error {
     Error::UnknownSymbol {
         symbol: symbol.clone(),
     }
+}
+
+fn class_protocol(value: &Value) -> Result<&dyn crate::Class> {
+    value.object().as_class().ok_or(Error::TypeMismatch {
+        expected: "class",
+        found: "non-class",
+    })
+}
+
+fn read_constructor_protocol(value: &Value) -> Result<&dyn crate::ReadConstructor> {
+    value
+        .object()
+        .as_read_constructor()
+        .ok_or(Error::TypeMismatch {
+            expected: "read-constructor",
+            found: "non-read-constructor",
+        })
 }
 
 /// The capability state of a [`Cx`]; an alias for [`CapabilitySet`].
@@ -71,7 +85,7 @@ pub struct Cx {
     datum_store: BTreeDatumStore,
     handles: BTreeHandleStore,
     facts: BTreeFactStore,
-    load_claims: BTreeMap<LibId, Vec<ContentId>>,
+    lib_load_ledger: LibLoadLedger,
     effect_ledger: EffectLedger,
     control_policy: ControlPolicyRef,
 }
@@ -111,7 +125,7 @@ impl Cx {
             datum_store,
             handles: BTreeHandleStore::default(),
             facts,
-            load_claims: BTreeMap::new(),
+            lib_load_ledger: LibLoadLedger::default(),
             effect_ledger: EffectLedger::default(),
             control_policy: Arc::new(NoopControlPolicy),
         }
@@ -351,23 +365,11 @@ impl Cx {
     }
 
     pub(crate) fn record_load_claims(&mut self, lib_id: LibId, claim_ids: Vec<ContentId>) {
-        if claim_ids.is_empty() {
-            return;
-        }
-        self.load_claims
-            .entry(lib_id)
-            .or_default()
-            .extend(claim_ids);
+        self.lib_load_ledger.record_claims(lib_id, claim_ids);
     }
 
     pub(crate) fn remove_load_claims(&mut self, lib_ids: &[LibId]) {
-        for lib_id in lib_ids {
-            if let Some(claim_ids) = self.load_claims.remove(lib_id) {
-                for claim_id in claim_ids {
-                    self.facts.remove(&claim_id);
-                }
-            }
-        }
+        self.lib_load_ledger.remove_claims(lib_ids, &mut self.facts);
     }
 
     /// Returns the limits bounding number-domain promotion search.
@@ -617,27 +619,11 @@ impl Cx {
     /// Requires the [`read_construct_capability`](crate::capability::read_construct_capability).
     pub fn read_construct(&mut self, class: &Symbol, args: Vec<Value>) -> Result<Value> {
         self.require(&read_construct_capability())?;
-
         let class_value = self.resolve_class(class)?;
-        let Some(class_impl) = class_value.object().as_class() else {
-            return Err(Error::TypeMismatch {
-                expected: "class",
-                found: "non-class",
-            });
-        };
-        let Some(read_constructor) = class_impl.read_constructor(self)? else {
-            return Err(Error::Eval(format!(
-                "class {} has no read constructor",
-                class
-            )));
-        };
-        let Some(read_impl) = read_constructor.object().as_read_constructor() else {
-            return Err(Error::TypeMismatch {
-                expected: "read-constructor",
-                found: "non-read-constructor",
-            });
-        };
-        read_impl.construct_read(self, args)
+        let constructor = class_protocol(&class_value)?
+            .read_constructor(self)?
+            .ok_or_else(|| Error::Eval(format!("class {class} has no read constructor")))?;
+        read_constructor_protocol(&constructor)?.construct_read(self, args)
     }
 
     /// Forces a value to the requested demand through the active eval policy.
