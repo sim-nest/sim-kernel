@@ -72,6 +72,26 @@ enum AdapterKind {
     ExprSnapshot,
 }
 
+const ADAPTER_KINDS: [AdapterKind; 17] = [
+    AdapterKind::Call,
+    AdapterKind::ShapeCheckValue,
+    AdapterKind::ShapeCheckTerm,
+    AdapterKind::ShapeDescribe,
+    AdapterKind::ClassSymbol,
+    AdapterKind::ObjectEncoding,
+    AdapterKind::ReadConstruct,
+    AdapterKind::NumberDomainSymbol,
+    AdapterKind::NumberValue,
+    AdapterKind::RealizeStart,
+    AdapterKind::Force,
+    AdapterKind::SeqNext,
+    AdapterKind::SeqClose,
+    AdapterKind::ListItems,
+    AdapterKind::TableEntries,
+    AdapterKind::DirIsDir,
+    AdapterKind::ExprSnapshot,
+];
+
 impl AdapterKind {
     fn key(self) -> OpKey {
         match self {
@@ -128,6 +148,18 @@ impl AdapterKind {
     }
 }
 
+pub(crate) fn adapter_operation_keys_for_value(
+    target: &Value,
+    include_universal: bool,
+) -> Vec<OpKey> {
+    ADAPTER_KINDS
+        .iter()
+        .copied()
+        .filter(|kind| adapter_kind_available(target, *kind, include_universal))
+        .map(AdapterKind::key)
+        .collect()
+}
+
 pub(crate) fn resolve_adapter<'a>(
     cx: &mut Cx,
     target: &'a Value,
@@ -144,58 +176,31 @@ pub(crate) fn resolve_adapter<'a>(
 }
 
 fn adapter_kind(target: &Value, key: &OpKey) -> Option<AdapterKind> {
-    if *key == core_call_op_key() && target.object().as_callable().is_some() {
-        return Some(AdapterKind::Call);
+    ADAPTER_KINDS
+        .iter()
+        .copied()
+        .find(|kind| kind.key() == *key && adapter_kind_available(target, *kind, true))
+}
+
+fn adapter_kind_available(target: &Value, kind: AdapterKind, include_universal: bool) -> bool {
+    match kind {
+        AdapterKind::Call => target.object().as_callable().is_some(),
+        AdapterKind::ShapeCheckValue | AdapterKind::ShapeCheckTerm | AdapterKind::ShapeDescribe => {
+            target.object().as_shape().is_some()
+        }
+        AdapterKind::ClassSymbol => target.object().as_class().is_some(),
+        AdapterKind::ObjectEncoding => target.object().as_object_encoder().is_some(),
+        AdapterKind::ReadConstruct => target.object().as_read_constructor().is_some(),
+        AdapterKind::NumberDomainSymbol => target.object().as_number_domain().is_some(),
+        AdapterKind::NumberValue => target.object().as_number_value().is_some(),
+        AdapterKind::RealizeStart => target.object().as_eval_fabric().is_some(),
+        AdapterKind::Force => target.object().as_thunk().is_some(),
+        AdapterKind::SeqNext | AdapterKind::SeqClose => target_is_sequence(target),
+        AdapterKind::ListItems => target.object().as_list().is_some(),
+        AdapterKind::TableEntries => target.object().as_table_impl().is_some(),
+        AdapterKind::DirIsDir => target.object().as_dir().is_some(),
+        AdapterKind::ExprSnapshot => include_universal,
     }
-    if *key == core_shape_check_value_op_key() && target.object().as_shape().is_some() {
-        return Some(AdapterKind::ShapeCheckValue);
-    }
-    if *key == core_shape_check_term_op_key() && target.object().as_shape().is_some() {
-        return Some(AdapterKind::ShapeCheckTerm);
-    }
-    if *key == core_shape_describe_op_key() && target.object().as_shape().is_some() {
-        return Some(AdapterKind::ShapeDescribe);
-    }
-    if *key == core_class_symbol_op_key() && target.object().as_class().is_some() {
-        return Some(AdapterKind::ClassSymbol);
-    }
-    if *key == core_object_encoding_op_key() && target.object().as_object_encoder().is_some() {
-        return Some(AdapterKind::ObjectEncoding);
-    }
-    if *key == core_read_construct_op_key() && target.object().as_read_constructor().is_some() {
-        return Some(AdapterKind::ReadConstruct);
-    }
-    if *key == core_number_domain_symbol_op_key() && target.object().as_number_domain().is_some() {
-        return Some(AdapterKind::NumberDomainSymbol);
-    }
-    if *key == core_number_value_op_key() && target.object().as_number_value().is_some() {
-        return Some(AdapterKind::NumberValue);
-    }
-    if *key == core_realize_start_op_key() && target.object().as_eval_fabric().is_some() {
-        return Some(AdapterKind::RealizeStart);
-    }
-    if *key == core_force_op_key() && target.object().as_thunk().is_some() {
-        return Some(AdapterKind::Force);
-    }
-    if *key == core_seq_next_op_key() && target_is_sequence(target) {
-        return Some(AdapterKind::SeqNext);
-    }
-    if *key == core_seq_close_op_key() && target_is_sequence(target) {
-        return Some(AdapterKind::SeqClose);
-    }
-    if *key == core_list_items_op_key() && target.object().as_list().is_some() {
-        return Some(AdapterKind::ListItems);
-    }
-    if *key == core_table_entries_op_key() && target.object().as_table_impl().is_some() {
-        return Some(AdapterKind::TableEntries);
-    }
-    if *key == core_dir_is_dir_op_key() && target.object().as_dir().is_some() {
-        return Some(AdapterKind::DirIsDir);
-    }
-    if *key == core_expr_snapshot_op_key() {
-        return Some(AdapterKind::ExprSnapshot);
-    }
-    None
 }
 
 fn invoke_callable(cx: &mut Cx, target: &Value, input: Value) -> Result<Step> {

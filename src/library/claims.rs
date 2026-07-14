@@ -11,6 +11,7 @@ use crate::{
 };
 
 use crate::error::Result;
+use crate::op_adapters::adapter_operation_keys_for_value;
 use crate::term::OpKey;
 
 pub(crate) fn publish_loaded_lib_claims(cx: &mut Cx, loaded: &LoadedLib) -> Result<Vec<ContentId>> {
@@ -102,47 +103,8 @@ fn operation_claims_for_value(value: &Value) -> Vec<String> {
             ops.insert(operation_key_text(&key));
         }
     }
-    if object.as_callable().is_some() {
-        ops.insert(operation_key_text(&core_call_op_key()));
-    }
-    if object.as_shape().is_some() {
-        ops.insert(operation_key_text(&core_shape_check_value_op_key()));
-        ops.insert(operation_key_text(&core_shape_check_term_op_key()));
-        ops.insert(operation_key_text(&core_shape_describe_op_key()));
-    }
-    if object.as_class().is_some() {
-        ops.insert(operation_key_text(&core_class_symbol_op_key()));
-    }
-    if object.as_object_encoder().is_some() {
-        ops.insert(operation_key_text(&core_object_encoding_op_key()));
-    }
-    if object.as_read_constructor().is_some() {
-        ops.insert(operation_key_text(&core_read_construct_op_key()));
-    }
-    if object.as_number_domain().is_some() {
-        ops.insert(operation_key_text(&core_number_domain_symbol_op_key()));
-    }
-    if object.as_number_value().is_some() {
-        ops.insert(operation_key_text(&core_number_value_op_key()));
-    }
-    if object.as_eval_fabric().is_some() {
-        ops.insert(operation_key_text(&core_realize_start_op_key()));
-    }
-    if object.as_thunk().is_some() {
-        ops.insert(operation_key_text(&core_force_op_key()));
-    }
-    if object.as_sequence().is_some() || object.as_stream().is_some() {
-        ops.insert(operation_key_text(&core_seq_next_op_key()));
-        ops.insert(operation_key_text(&core_seq_close_op_key()));
-    }
-    if object.as_list().is_some() {
-        ops.insert(operation_key_text(&core_list_items_op_key()));
-    }
-    if object.as_table_impl().is_some() {
-        ops.insert(operation_key_text(&core_table_entries_op_key()));
-    }
-    if object.as_dir().is_some() {
-        ops.insert(operation_key_text(&core_dir_is_dir_op_key()));
+    for key in adapter_operation_keys_for_value(value, false) {
+        ops.insert(operation_key_text(&key));
     }
 
     ops.into_iter().collect()
