@@ -34,6 +34,12 @@ use super::{Diagnostics, Env};
 /// so it does not affect evaluation determinism.
 static NEXT_GRANT_ID: AtomicU64 = AtomicU64::new(1);
 
+fn unknown_symbol(symbol: &Symbol) -> Error {
+    Error::UnknownSymbol {
+        symbol: symbol.clone(),
+    }
+}
+
 /// The capability state of a [`Cx`]; an alias for [`CapabilitySet`].
 pub type Capabilities = CapabilitySet;
 
@@ -506,72 +512,70 @@ impl Cx {
 
     /// Resolves a registered class by symbol.
     pub fn resolve_class(&self, symbol: &Symbol) -> Result<Value> {
-        self.registry()
-            .class_by_symbol(symbol)
-            .cloned()
-            .ok_or_else(|| Error::UnknownClass {
+        self.resolve_registered_value(
+            |registry| registry.class_by_symbol(symbol),
+            Error::UnknownClass {
                 class: symbol.clone(),
-            })
+            },
+        )
     }
 
     /// Resolves a registered function by symbol.
     pub fn resolve_function(&self, symbol: &Symbol) -> Result<Value> {
-        self.registry()
-            .function_by_symbol(symbol)
-            .cloned()
-            .ok_or_else(|| Error::UnknownFunction {
+        self.resolve_registered_value(
+            |registry| registry.function_by_symbol(symbol),
+            Error::UnknownFunction {
                 function: symbol.clone(),
-            })
+            },
+        )
     }
 
     /// Resolves a registered macro by symbol.
     pub fn resolve_macro(&self, symbol: &Symbol) -> Result<Value> {
-        self.registry()
-            .macro_by_symbol(symbol)
-            .cloned()
-            .ok_or_else(|| Error::UnknownSymbol {
-                symbol: symbol.clone(),
-            })
+        self.resolve_registered_value(
+            |registry| registry.macro_by_symbol(symbol),
+            unknown_symbol(symbol),
+        )
     }
 
     /// Resolves a registered shape by symbol.
     pub fn resolve_shape(&self, symbol: &Symbol) -> Result<Value> {
-        self.registry()
-            .shape_by_symbol(symbol)
-            .cloned()
-            .ok_or_else(|| Error::UnknownSymbol {
-                symbol: symbol.clone(),
-            })
+        self.resolve_registered_value(
+            |registry| registry.shape_by_symbol(symbol),
+            unknown_symbol(symbol),
+        )
     }
 
     /// Resolves a registered codec by symbol.
     pub fn resolve_codec(&self, symbol: &Symbol) -> Result<Value> {
-        self.registry()
-            .codec_by_symbol(symbol)
-            .cloned()
-            .ok_or_else(|| Error::UnknownSymbol {
-                symbol: symbol.clone(),
-            })
+        self.resolve_registered_value(
+            |registry| registry.codec_by_symbol(symbol),
+            unknown_symbol(symbol),
+        )
     }
 
     /// Resolves a registered number domain by symbol.
     pub fn resolve_number_domain(&self, symbol: &Symbol) -> Result<Value> {
-        self.registry()
-            .number_domain_by_symbol(symbol)
-            .cloned()
-            .ok_or_else(|| Error::UnknownSymbol {
-                symbol: symbol.clone(),
-            })
+        self.resolve_registered_value(
+            |registry| registry.number_domain_by_symbol(symbol),
+            unknown_symbol(symbol),
+        )
     }
 
     /// Resolves a registered value binding by symbol.
     pub fn resolve_value(&self, symbol: &Symbol) -> Result<Value> {
-        self.registry()
-            .value_by_symbol(symbol)
-            .cloned()
-            .ok_or_else(|| Error::UnknownSymbol {
-                symbol: symbol.clone(),
-            })
+        self.resolve_registered_value(
+            |registry| registry.value_by_symbol(symbol),
+            unknown_symbol(symbol),
+        )
+    }
+
+    fn resolve_registered_value(
+        &self,
+        lookup: impl FnOnce(&Registry) -> Option<&Value>,
+        not_found: Error,
+    ) -> Result<Value> {
+        lookup(self.registry()).cloned().ok_or(not_found)
     }
 
     /// Calls a callable value with already-evaluated arguments.

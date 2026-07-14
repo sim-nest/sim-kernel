@@ -1,7 +1,8 @@
 use std::sync::Arc;
 
 use crate::{
-    DefaultFactory, NoopEvalPolicy, Value,
+    Callable, DefaultFactory, Error, NoopEvalPolicy, Value,
+    object::{Args, RawArgs},
     shape::{
         ExprKind, MatchScore, Shape, ShapeBindings, ShapeCallTarget, ShapeDoc, ShapeMatch,
         call_shape,
@@ -57,4 +58,38 @@ fn kernel_shape_call_returns_match_table() {
     let table = table.object().as_table_impl().unwrap();
     let _ = table.get(&mut cx, crate::Symbol::new("accepted")).unwrap();
     let _ = table.get(&mut cx, crate::Symbol::new("score")).unwrap();
+}
+
+#[test]
+fn summed_rejects_stay_below_accept() {
+    let mut score = MatchScore::reject();
+    for _ in 0..64 {
+        score += MatchScore::reject();
+    }
+    assert!(score < MatchScore::exact(0));
+}
+
+#[test]
+fn shape_callable_accepts_exactly_one_argument() {
+    let mut cx = cx();
+    let shape = AnyKernelShape;
+    let value = cx.factory().string("ok".to_owned()).unwrap();
+
+    let matched = shape
+        .call(&mut cx, Args::new(vec![value.clone()]))
+        .expect("one evaluated value should match");
+    assert!(matched.object().truth(&mut cx).unwrap());
+
+    let error = shape.call(&mut cx, Args::new(Vec::new())).unwrap_err();
+    assert!(matches!(error, Error::Eval(message) if message == "shape call expects 1 argument"));
+
+    let error = shape
+        .call(&mut cx, Args::new(vec![value.clone(), value]))
+        .unwrap_err();
+    assert!(matches!(error, Error::Eval(message) if message == "shape call expects 1 argument"));
+
+    let error = shape
+        .call_exprs(&mut cx, RawArgs::new(Vec::new()))
+        .unwrap_err();
+    assert!(matches!(error, Error::Eval(message) if message == "shape call expects 1 expression"));
 }

@@ -166,6 +166,7 @@ impl<T> Callable for T
 where
     T: Shape,
 {
+    /// Calls a shape as a matcher over exactly one already-evaluated value.
     fn call(&self, cx: &mut Cx, args: Args) -> Result<Value> {
         let [value] = args.values() else {
             return Err(Error::Eval("shape call expects 1 argument".to_owned()));
@@ -173,6 +174,7 @@ where
         call_shape(cx, self, ShapeCallTarget::Value(value.clone()))
     }
 
+    /// Calls a shape as a matcher over exactly one unevaluated expression.
     fn call_exprs(&self, cx: &mut Cx, args: RawArgs) -> Result<Value> {
         let [expr] = args.exprs() else {
             return Err(Error::Eval("shape call expects 1 expression".to_owned()));
@@ -232,7 +234,7 @@ impl MatchScore {
 
 impl core::ops::AddAssign for MatchScore {
     fn add_assign(&mut self, rhs: Self) {
-        self.0 += rhs.0;
+        self.0 = self.0.saturating_add(rhs.0);
     }
 }
 

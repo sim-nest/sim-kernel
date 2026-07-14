@@ -265,10 +265,9 @@ impl crate::ObjectCompat for BasicClass {
 
 impl Callable for BasicClass {
     fn call(&self, _cx: &mut Cx, _args: Args) -> Result<Value> {
-        Err(Error::Eval(format!(
-            "constructor {} is not implemented yet",
-            self.symbol
-        )))
+        Err(Error::NonConstructibleClass {
+            class: self.symbol.clone(),
+        })
     }
 }
 
@@ -295,5 +294,31 @@ impl Class for BasicClass {
 
     fn members(&self, _cx: &mut Cx) -> Result<TableRef> {
         Ok(Value::from_arc(Arc::new(AssocTable::new())))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Arc;
+
+    use crate::{CORE_CLASS_CLASS_ID, DefaultFactory, Error, NoopEvalPolicy, Symbol, object::Args};
+
+    #[test]
+    fn class_stub_reports_non_constructible_constructor() {
+        let mut cx = crate::Cx::new(Arc::new(NoopEvalPolicy), Arc::new(DefaultFactory));
+        let symbol = Symbol::qualified("core", "Class");
+        let class = cx
+            .factory()
+            .class_stub(CORE_CLASS_CLASS_ID, symbol.clone())
+            .unwrap();
+
+        assert!(class.object().as_class().is_some());
+        assert!(class.object().as_callable().is_some());
+
+        let error = cx.call_value(class, Args::new(Vec::new())).unwrap_err();
+        assert!(matches!(
+            error,
+            Error::NonConstructibleClass { class } if class == symbol
+        ));
     }
 }

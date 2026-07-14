@@ -106,6 +106,12 @@ pub enum Error {
         /// The unresolved class name.
         class: Symbol,
     },
+    /// A class exists but does not provide a callable constructor.
+    #[error("class {class} is not constructible")]
+    NonConstructibleClass {
+        /// The class that was called as a constructor.
+        class: Symbol,
+    },
     /// A function name could not be resolved.
     #[error("unknown function {function}")]
     UnknownFunction {
