@@ -180,10 +180,8 @@ fn spine_len_cmp_impl<T: ListValue + ?Sized>(cx: &mut Cx, head: &T, n: usize) ->
 /// assert!(empty.as_slice().is_empty());
 /// ```
 // sim-non-citizen(reason = "kernel list backing object; canonical form is native Expr::List data", kind = "private", descriptor = "")
-// FUTURE CLEANUP: this is the kernel's built-in REFERENCE list backend (the
-// bootstrap implementation). Once a default-loaded distribution lib can supply
-// a `ListBackend` before any user code runs, move `VecList` out of the kernel
-// and keep only the `ListValue`/`ListBackend` contracts here.
+// VecList is the built-in bootstrap list backend. It implements the same
+// ListValue/ListBackend contracts as loadable list backends.
 #[derive(Clone)]
 pub struct VecList {
     values: Arc<[Value]>,

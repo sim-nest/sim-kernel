@@ -8,15 +8,10 @@
 //! library crates loaded against these contracts. SIM is a Rust runtime, not a
 //! Lisp runtime; Lisp is one codec surface among several.
 //!
-//! The one deliberate exception is the pair of built-in *reference backends*:
-//! [`list::VecList`] (a [`list::ListValue`]) and [`table::AssocTable`] (a
-//! [`table::Table`]). These are the kernel's bootstrap list and table
-//! implementations -- minimal, correct, and self-annotated `sim-non-citizen` --
-//! so the runtime can stand up collections before any library loads. They are
-//! reference implementations, not the only backends: alternatives load as libs
-//! against the [`list::ListBackend`]/[`table::TableBackend`] contracts. (Future
-//! cleanup: move even these into a default-loaded distribution lib so the kernel
-//! ships pure contracts; tracked against the constellation reorg.)
+//! The built-in [`list::VecList`] and [`table::AssocTable`] backends provide
+//! bootstrap collection values before any library configures alternate backends.
+//! They implement the same [`list::ListBackend`] and [`table::TableBackend`]
+//! contracts as loadable alternatives.
 //!
 //! The kernel data flow is:
 //!
