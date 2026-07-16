@@ -93,6 +93,7 @@ pub mod seq;
 #[cfg(test)]
 mod seq_tests;
 pub mod shape;
+mod shape_check;
 pub mod shape_report;
 pub mod standard;
 pub mod stream;

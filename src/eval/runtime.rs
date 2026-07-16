@@ -4,6 +4,7 @@ use crate::{
     eval::{Demand, Phase},
     expr::Expr,
     id::ClassId,
+    shape_check::check_shape_id,
     value::Value,
 };
 
@@ -57,12 +58,13 @@ pub fn force_default(cx: &mut Cx, value: Value, demand: Demand) -> Result<Value>
                 Err(Error::WrongClass { expected, found })
             }
         }
-        Demand::Shape(_) => {
-            if let Some(thunk) = value.object().as_thunk() {
-                thunk.force(cx, demand)
+        Demand::Shape(expected) => {
+            let forced = if let Some(thunk) = value.object().as_thunk() {
+                thunk.force(cx, demand)?
             } else {
-                Ok(value)
-            }
+                value
+            };
+            check_shape_id(cx, expected, forced)
         }
     }
 }

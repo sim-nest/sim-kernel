@@ -10,8 +10,9 @@ use crate::{
     error::Error,
     expr::Expr,
     factory::DefaultFactory,
-    id::{CORE_EVAL_REQUEST_CLASS_ID, CORE_FUNCTION_CLASS_ID, CORE_SHAPE_CLASS_ID},
+    id::{CORE_EVAL_REQUEST_CLASS_ID, CORE_FUNCTION_CLASS_ID, CORE_SHAPE_CLASS_ID, ShapeId},
     object::{Args, Object, RawArgs},
+    shape::{MatchScore, Shape, ShapeDoc, ShapeMatch},
     value::Value,
 };
 
@@ -127,6 +128,28 @@ impl crate::ObjectCompat for FailThenSucceedCallable {
     }
 }
 
+struct FixedShape {
+    accepted: bool,
+}
+
+impl Shape for FixedShape {
+    fn check_value(&self, _cx: &mut Cx, _value: Value) -> Result<ShapeMatch> {
+        if self.accepted {
+            Ok(ShapeMatch::accept(MatchScore::exact(1)))
+        } else {
+            Ok(ShapeMatch::reject("fixed rejection"))
+        }
+    }
+
+    fn check_expr(&self, _cx: &mut Cx, _expr: &Expr) -> Result<ShapeMatch> {
+        Ok(ShapeMatch::reject("value-only shape"))
+    }
+
+    fn describe(&self, _cx: &mut Cx) -> Result<ShapeDoc> {
+        Ok(ShapeDoc::new("fixed"))
+    }
+}
+
 struct RejectUnboundNamesPolicy;
 
 impl EvalPolicy for RejectUnboundNamesPolicy {
@@ -171,6 +194,16 @@ fn test_cx() -> Cx {
 
 fn strict_names_cx() -> Cx {
     Cx::new(Arc::new(StrictNames(EagerPolicy)), Arc::new(DefaultFactory))
+}
+
+fn registered_shape(cx: &mut Cx, name: &str, accepted: bool) -> ShapeId {
+    let shape = cx
+        .factory()
+        .opaque(Arc::new(FixedShape { accepted }))
+        .unwrap();
+    cx.registry_mut()
+        .register_shape_value(Symbol::qualified("test", name), shape)
+        .unwrap()
 }
 
 #[test]
@@ -226,6 +259,45 @@ fn eval_policy_can_reject_unbound_operator_call() {
         err,
         Error::UnknownFunction { function } if function == operator
     ));
+}
+
+#[test]
+fn demand_shape_accepts_matching_value() {
+    let mut cx = test_cx();
+    let shape = registered_shape(&mut cx, "accepting-shape", true);
+    let value = cx.factory().string("ok".to_owned()).unwrap();
+
+    let forced = cx.force(value.clone(), Demand::Shape(shape)).unwrap();
+
+    assert_eq!(forced, value);
+}
+
+#[test]
+fn demand_shape_rejects_mismatched_value() {
+    let mut cx = test_cx();
+    let shape = registered_shape(&mut cx, "rejecting-shape", false);
+    let value = cx.factory().string("bad".to_owned()).unwrap();
+
+    let err = cx.force(value, Demand::Shape(shape)).unwrap_err();
+
+    assert!(matches!(
+        err,
+        Error::WrongShape {
+            expected,
+            diagnostics
+        } if expected == shape && diagnostics.len() == 1
+    ));
+}
+
+#[test]
+fn demand_shape_requires_registered_shape_id() {
+    let mut cx = test_cx();
+    let missing = ShapeId(99_999);
+    let value = cx.factory().string("unchecked".to_owned()).unwrap();
+
+    let err = cx.force(value, Demand::Shape(missing)).unwrap_err();
+
+    assert!(matches!(err, Error::MissingShape(found) if found == missing));
 }
 
 #[test]

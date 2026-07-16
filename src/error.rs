@@ -121,6 +121,15 @@ pub enum Error {
     /// No class is registered under the given id.
     #[error("missing class with id {0:?}")]
     MissingClass(ClassId),
+    /// No shape is registered under the given id.
+    #[error("missing shape with id {0:?}")]
+    MissingShape(ShapeId),
+    /// A shape reference could not be resolved.
+    #[error("unresolved shape ref {reference:?}")]
+    UnresolvedShapeRef {
+        /// The unresolved shape reference.
+        reference: Box<crate::Ref>,
+    },
     /// A value's class did not match the expected class.
     #[error("wrong class: expected {expected:?}, found {found:?}")]
     WrongClass {
