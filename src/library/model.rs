@@ -156,6 +156,17 @@ pub enum Export {
         /// Reserved opaque runtime id, if known.
         runtime_id: Option<RuntimeId>,
     },
+    /// An open export declaration with no kernel runtime-value model.
+    ///
+    /// Open declarations let manifests name export kinds that the kernel does
+    /// not resolve itself. They can commit as declared, unsupported, or invalid
+    /// export records, but they do not carry stable runtime ids.
+    Open {
+        /// Open export kind.
+        kind: ExportKind,
+        /// Symbol the export is declared under.
+        symbol: Symbol,
+    },
 }
 
 /// An open, symbol-keyed export kind tag.
@@ -287,7 +298,8 @@ impl Export {
             | Self::Codec { symbol, .. }
             | Self::NumberDomain { symbol, .. }
             | Self::Value { symbol }
-            | Self::Site { symbol, .. } => symbol,
+            | Self::Site { symbol, .. }
+            | Self::Open { symbol, .. } => symbol,
         }
     }
 
@@ -302,12 +314,16 @@ impl Export {
             Self::NumberDomain { .. } => "number-domain",
             Self::Value { .. } => "value",
             Self::Site { .. } => "site",
+            Self::Open { .. } => "export",
         }
     }
 
     /// Returns this export's kind as an [`ExportKind`] tag.
     pub fn kind_symbol(&self) -> ExportKind {
-        ExportKind::named(self.kind())
+        match self {
+            Self::Open { kind, .. } => kind.clone(),
+            _ => ExportKind::named(self.kind()),
+        }
     }
 
     /// Builds a [`Declared`](ExportState::Declared) [`ExportRecord`] for this

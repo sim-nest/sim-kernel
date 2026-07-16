@@ -269,31 +269,44 @@ fn dependency_from_datum(datum: &Datum) -> Result<crate::Dependency> {
 
 fn export_datum(export: &Export) -> Datum {
     let (kind, symbol, stable_id) = match export {
-        Export::Class { symbol, class_id } => ("class", symbol, class_id.map(|id| id.0)),
+        Export::Class { symbol, class_id } => {
+            (Symbol::new("class"), symbol, class_id.map(|id| id.0))
+        }
         Export::Function {
             symbol,
             function_id,
-        } => ("function", symbol, function_id.map(|id| id.0)),
-        Export::Macro { symbol, macro_id } => ("macro", symbol, macro_id.map(|id| id.0)),
-        Export::Shape { symbol, shape_id } => ("shape", symbol, shape_id.map(|id| id.0)),
-        Export::Codec { symbol, codec_id } => ("codec", symbol, codec_id.map(|id| id.0)),
+        } => (Symbol::new("function"), symbol, function_id.map(|id| id.0)),
+        Export::Macro { symbol, macro_id } => {
+            (Symbol::new("macro"), symbol, macro_id.map(|id| id.0))
+        }
+        Export::Shape { symbol, shape_id } => {
+            (Symbol::new("shape"), symbol, shape_id.map(|id| id.0))
+        }
+        Export::Codec { symbol, codec_id } => {
+            (Symbol::new("codec"), symbol, codec_id.map(|id| id.0))
+        }
         Export::NumberDomain {
             symbol,
             number_domain_id,
-        } => ("number-domain", symbol, number_domain_id.map(|id| id.0)),
-        Export::Value { symbol } => ("value", symbol, None),
+        } => (
+            Symbol::new("number-domain"),
+            symbol,
+            number_domain_id.map(|id| id.0),
+        ),
+        Export::Value { symbol } => (Symbol::new("value"), symbol, None),
         Export::Site { symbol, runtime_id } => {
             let stable_id = match runtime_id {
                 Some(RuntimeId::Site(id)) => Some(id.0),
                 _ => None,
             };
-            ("site", symbol, stable_id)
+            (Symbol::new("site"), symbol, stable_id)
         }
+        Export::Open { kind, symbol } => (kind.symbol().clone(), symbol, None),
     };
     node(
         "export",
         vec![
-            ("kind", Datum::Symbol(Symbol::new(kind))),
+            ("kind", Datum::Symbol(kind)),
             ("symbol", Datum::Symbol(symbol.clone())),
             ("stable-id", stable_id.map(u32_datum).unwrap_or(Datum::Nil)),
         ],
@@ -335,7 +348,13 @@ fn export_from_datum(datum: &Datum) -> Result<Export> {
             symbol,
             runtime_id: stable_id.map(|id| RuntimeId::Site(SiteId(id))),
         }),
-        _ => Err(Error::Lib(format!("unknown export kind {kind}"))),
+        _ if stable_id.is_none() => Ok(Export::Open {
+            kind: ExportKind::new(kind.clone()),
+            symbol,
+        }),
+        _ => Err(Error::Lib(format!(
+            "open export kind {kind} cannot carry stable-id"
+        ))),
     }
 }
 
@@ -652,5 +671,44 @@ mod tests {
             let decoded = manifest_from_datum(&manifest_datum(&manifest)).expect("decode manifest");
             assert_eq!(decoded.target, target);
         }
+    }
+
+    #[test]
+    fn open_export_declaration_round_trips_through_the_manifest_codec() {
+        let kind = ExportKind::new(Symbol::qualified("surface", "projection"));
+        let export = Export::Open {
+            kind: kind.clone(),
+            symbol: Symbol::new("graph-view"),
+        };
+        let mut manifest = sample_manifest(LibTarget::HostRegistered);
+        manifest.exports.push(export.clone());
+
+        let decoded = manifest_from_datum(&manifest_datum(&manifest)).expect("decode manifest");
+
+        assert_eq!(decoded.exports, vec![export]);
+        assert_eq!(decoded.exports[0].kind_symbol(), kind);
+    }
+
+    #[test]
+    fn open_export_declaration_rejects_stable_id() {
+        let datum = node(
+            "export",
+            vec![
+                (
+                    "kind",
+                    Datum::Symbol(Symbol::qualified("surface", "projection")),
+                ),
+                ("symbol", Datum::Symbol(Symbol::new("graph-view"))),
+                ("stable-id", u32_datum(7)),
+            ],
+        );
+
+        let err = export_from_datum(&datum).unwrap_err();
+
+        assert!(matches!(
+            err,
+            Error::Lib(message)
+                if message == "open export kind surface/projection cannot carry stable-id"
+        ));
     }
 }

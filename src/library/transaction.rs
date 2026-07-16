@@ -257,6 +257,23 @@ impl<'a> Linker<'a> {
         Ok(())
     }
 
+    /// Stages an [`Invalid`](ExportState::Invalid) export record with an error.
+    pub fn invalid_export(
+        &mut self,
+        kind: ExportKind,
+        symbol: Symbol,
+        error: impl Into<String>,
+    ) -> Result<()> {
+        self.pending.export_records.push(ExportRecord {
+            kind,
+            symbol,
+            state: ExportState::Invalid {
+                error: error.into(),
+            },
+        });
+        Ok(())
+    }
+
     /// Stages a plain value export and binds its value in one step.
     pub fn value(&mut self, symbol: Symbol, value: Value) -> Result<()> {
         self.value_export(symbol.clone())?;

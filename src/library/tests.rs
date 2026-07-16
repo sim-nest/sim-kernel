@@ -408,6 +408,65 @@ fn commit_keeps_declared_unsupported_export_records() {
     }));
 }
 
+#[test]
+fn commit_keeps_declared_open_export_records() {
+    let mut registry = Registry::default();
+    let kind = ExportKind::new(Symbol::qualified("surface", "projection"));
+    let declared = Symbol::new("declared-surface");
+    let unsupported = Symbol::new("unsupported-surface");
+    let invalid = Symbol::new("invalid-surface");
+    let mut txn = registry.begin_load(
+        LibManifest {
+            exports: vec![
+                Export::Open {
+                    kind: kind.clone(),
+                    symbol: declared.clone(),
+                },
+                Export::Open {
+                    kind: kind.clone(),
+                    symbol: unsupported.clone(),
+                },
+                Export::Open {
+                    kind: kind.clone(),
+                    symbol: invalid.clone(),
+                },
+            ],
+            ..manifest("open-export-lib", "0.1.0")
+        },
+        true,
+    );
+    {
+        let mut linker = txn.linker();
+        linker
+            .declare_export(kind.clone(), declared.clone())
+            .unwrap();
+        linker
+            .unsupported_export(kind.clone(), unsupported.clone(), "not available")
+            .unwrap();
+        linker
+            .invalid_export(kind.clone(), invalid.clone(), "bad declaration")
+            .unwrap();
+    }
+
+    registry.commit_load(txn).unwrap();
+    let loaded = registry.lib(&Symbol::new("open-export-lib")).unwrap();
+
+    assert!(loaded.exports.iter().any(|record| {
+        record.kind == kind && record.symbol == declared && record.state == ExportState::Declared
+    }));
+    assert!(loaded.exports.iter().any(|record| {
+        record.kind == kind
+            && record.symbol == unsupported
+            && matches!(record.state, ExportState::Unsupported { .. })
+    }));
+    assert!(loaded.exports.iter().any(|record| {
+        record.kind == kind
+            && record.symbol == invalid
+            && matches!(record.state, ExportState::Invalid { .. })
+    }));
+    assert!(!registry.export_symbols().contains_key(&kind));
+}
+
 // guards the registry catalog contract
 #[test]
 fn catalog_backed_sequences_preserve_representative_lib_load_ids() {
