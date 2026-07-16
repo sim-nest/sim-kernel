@@ -19,6 +19,7 @@ use crate::{
     ref_id::{ContentId, Coordinate, HandleId, Ref},
     ref_resolver::{RefResolver, TemporaryRefResolver},
     shape::{MatchScore, ShapeBindings, ShapeMatch},
+    term::Term,
     value::Value,
 };
 
@@ -199,8 +200,8 @@ fn captures_datum(cx: &mut Cx, captures: &ShapeBindings) -> Result<Datum> {
     let exprs = captures
         .exprs()
         .iter()
-        .map(|(name, expr)| binding_datum(name, "expr", expr_datum(expr)))
-        .collect();
+        .map(|(name, expr)| Ok(binding_datum(name, "expr", expr_datum(expr)?)))
+        .collect::<Result<Vec<_>>>()?;
 
     Ok(Datum::Node {
         tag: core_symbol("ShapeCaptures"),
@@ -222,11 +223,11 @@ fn binding_datum(name: &Symbol, kind: &str, value: Datum) -> Datum {
     }
 }
 
-fn expr_datum(expr: &Expr) -> Datum {
-    Datum::try_from(expr.clone()).unwrap_or_else(|_| Datum::Node {
-        tag: core_symbol("expr-canonical-key"),
-        fields: vec![(Symbol::new("debug"), Datum::String(format!("{:?}", expr)))],
-    })
+fn expr_datum(expr: &Expr) -> Result<Datum> {
+    match Datum::try_from(expr.clone()) {
+        Ok(datum) => Ok(datum),
+        Err(_) => Ok(Term::lower(expr.clone())?.to_datum()),
+    }
 }
 
 fn shape_report_datum(

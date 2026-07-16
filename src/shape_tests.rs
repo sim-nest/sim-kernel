@@ -1,11 +1,11 @@
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 use crate::{
-    Callable, DefaultFactory, Error, NoopEvalPolicy, Value,
+    Callable, DefaultFactory, Error, NoopEvalPolicy, ShapeRef, Symbol, Value,
     object::{Args, RawArgs},
     shape::{
         ExprKind, MatchScore, Shape, ShapeBindings, ShapeCallTarget, ShapeDoc, ShapeMatch,
-        call_shape,
+        call_shape, shape_is_subshape_of,
     },
 };
 
@@ -25,8 +25,47 @@ impl Shape for AnyKernelShape {
     }
 }
 
+struct ParentShape {
+    symbol: Symbol,
+    parents: Arc<Mutex<Vec<ShapeRef>>>,
+}
+
+impl Shape for ParentShape {
+    fn symbol(&self) -> Option<Symbol> {
+        Some(self.symbol.clone())
+    }
+
+    fn parents(&self, _cx: &mut crate::Cx) -> crate::Result<Vec<ShapeRef>> {
+        Ok(self.parents.lock().unwrap().clone())
+    }
+
+    fn check_value(&self, _cx: &mut crate::Cx, _value: Value) -> crate::Result<ShapeMatch> {
+        Ok(ShapeMatch::reject("not relevant"))
+    }
+
+    fn check_expr(&self, _cx: &mut crate::Cx, _expr: &crate::Expr) -> crate::Result<ShapeMatch> {
+        Ok(ShapeMatch::reject("not relevant"))
+    }
+
+    fn describe(&self, _cx: &mut crate::Cx) -> crate::Result<ShapeDoc> {
+        Ok(ShapeDoc::new(self.symbol.to_string()))
+    }
+}
+
 fn cx() -> crate::Cx {
     crate::Cx::new(Arc::new(NoopEvalPolicy), Arc::new(DefaultFactory))
+}
+
+fn parent_shape(cx: &mut crate::Cx, name: &str) -> (ShapeRef, Arc<Mutex<Vec<ShapeRef>>>) {
+    let parents = Arc::new(Mutex::new(Vec::new()));
+    let value = cx
+        .factory()
+        .opaque(Arc::new(ParentShape {
+            symbol: Symbol::qualified("test", name),
+            parents: parents.clone(),
+        }))
+        .unwrap();
+    (value, parents)
 }
 
 #[test]
@@ -92,4 +131,32 @@ fn shape_callable_accepts_exactly_one_argument() {
         .call_exprs(&mut cx, RawArgs::new(Vec::new()))
         .unwrap_err();
     assert!(matches!(error, Error::Eval(message) if message == "shape call expects 1 expression"));
+}
+
+#[test]
+fn subshape_walk_treats_self_parent_cycle_as_not_proven() {
+    let mut cx = cx();
+    let (child, parents) = parent_shape(&mut cx, "cyclic-child");
+    let (target, _) = parent_shape(&mut cx, "target");
+    parents.lock().unwrap().push(child.clone());
+
+    let child_shape = child.object().as_shape().unwrap();
+    let target_shape = target.object().as_shape().unwrap();
+
+    assert!(!shape_is_subshape_of(&mut cx, child_shape, target_shape).unwrap());
+}
+
+#[test]
+fn subshape_walk_treats_two_shape_parent_cycle_as_not_proven() {
+    let mut cx = cx();
+    let (left, left_parents) = parent_shape(&mut cx, "cycle-left");
+    let (right, right_parents) = parent_shape(&mut cx, "cycle-right");
+    let (target, _) = parent_shape(&mut cx, "target");
+    left_parents.lock().unwrap().push(right.clone());
+    right_parents.lock().unwrap().push(left.clone());
+
+    let left_shape = left.object().as_shape().unwrap();
+    let target_shape = target.object().as_shape().unwrap();
+
+    assert!(!shape_is_subshape_of(&mut cx, left_shape, target_shape).unwrap());
 }

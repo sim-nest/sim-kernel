@@ -163,6 +163,11 @@ impl Term {
             }),
         }
     }
+
+    /// Encodes this lowered executable form as canonical SIM data.
+    pub fn to_datum(&self) -> Datum {
+        term_datum(self)
+    }
 }
 
 impl TryFrom<Expr> for Term {
@@ -170,6 +175,12 @@ impl TryFrom<Expr> for Term {
 
     fn try_from(expr: Expr) -> Result<Self> {
         Self::lower(expr)
+    }
+}
+
+impl From<Term> for Datum {
+    fn from(term: Term) -> Self {
+        term.to_datum()
     }
 }
 
@@ -227,6 +238,101 @@ fn lower_terms(exprs: Vec<Expr>) -> Result<Vec<Term>> {
 
 fn data_literal(expr: Expr) -> Result<Term> {
     Datum::try_from(expr).map(Term::Literal)
+}
+
+fn term_datum(term: &Term) -> Datum {
+    match term {
+        Term::Literal(datum) => term_node("literal", vec![(Symbol::new("datum"), datum.clone())]),
+        Term::Ref(reference) => term_node(
+            "ref",
+            vec![(Symbol::new("ref"), ref_datum(reference.clone()))],
+        ),
+        Term::Local(symbol) => term_node(
+            "local",
+            vec![(Symbol::new("symbol"), Datum::Symbol(symbol.clone()))],
+        ),
+        Term::Let { name, value, body } => term_node(
+            "let",
+            vec![
+                (Symbol::new("name"), Datum::Symbol(name.clone())),
+                (Symbol::new("value"), term_datum(value)),
+                (Symbol::new("body"), term_datum(body)),
+            ],
+        ),
+        Term::Op { op, input } => term_node(
+            "op",
+            vec![
+                (Symbol::new("op"), op_key_datum(op.clone())),
+                (Symbol::new("input"), term_datum(input)),
+            ],
+        ),
+        Term::Call { target, args } => term_node(
+            "call",
+            vec![
+                (Symbol::new("target"), term_datum(target)),
+                (Symbol::new("args"), terms_datum(args)),
+            ],
+        ),
+        Term::Seq(items) => term_node("seq", vec![(Symbol::new("items"), terms_datum(items))]),
+        Term::Quote { mode, datum } => term_node(
+            "quote",
+            vec![
+                (Symbol::new("mode"), Datum::Symbol(quote_mode_symbol(*mode))),
+                (Symbol::new("datum"), datum.clone()),
+            ],
+        ),
+        Term::Annotated { term, annotations } => term_node(
+            "annotated",
+            vec![
+                (Symbol::new("term"), term_datum(term)),
+                (
+                    Symbol::new("annotations"),
+                    Datum::Vector(
+                        annotations
+                            .iter()
+                            .map(|(name, datum)| Datum::Node {
+                                tag: core_symbol("term-annotation"),
+                                fields: vec![
+                                    (Symbol::new("name"), Datum::Symbol(name.clone())),
+                                    (Symbol::new("datum"), datum.clone()),
+                                ],
+                            })
+                            .collect(),
+                    ),
+                ),
+            ],
+        ),
+        Term::Extension { tag, payload } => term_node(
+            "extension",
+            vec![
+                (Symbol::new("tag"), Datum::Symbol(tag.clone())),
+                (Symbol::new("payload"), payload.clone()),
+            ],
+        ),
+    }
+}
+
+fn term_node(kind: &str, fields: Vec<(Symbol, Datum)>) -> Datum {
+    let mut node_fields = vec![(Symbol::new("kind"), Datum::Symbol(core_symbol(kind)))];
+    node_fields.extend(fields);
+    Datum::Node {
+        tag: core_symbol("term"),
+        fields: node_fields,
+    }
+}
+
+fn terms_datum(terms: &[Term]) -> Datum {
+    Datum::Vector(terms.iter().map(term_datum).collect())
+}
+
+fn quote_mode_symbol(mode: QuoteMode) -> Symbol {
+    core_symbol(match mode {
+        QuoteMode::Quote => "quote",
+        QuoteMode::QuasiQuote => "quasiquote",
+        QuoteMode::Unquote => "unquote",
+        QuoteMode::Splice => "splice",
+        QuoteMode::Syntax => "syntax",
+    })
 }
 
 fn ref_to_expr(reference: Ref) -> Expr {

@@ -5,7 +5,7 @@
 //! kernel defines the protocol and the match/binding contracts, while concrete
 //! shapes are implemented by the libraries.
 
-use std::{any::Any, sync::Arc};
+use std::{any::Any, collections::BTreeSet, sync::Arc};
 
 use crate::{
     callable::Callable,
@@ -552,6 +552,16 @@ pub fn shape_match_value(cx: &mut Cx, matched: ShapeMatch) -> Result<Value> {
 /// and `AnyShape` symbols as a top for non-effectful shapes, and otherwise
 /// recurses through the declared [`parents`](Shape::parents).
 pub fn shape_is_subshape_of(cx: &mut Cx, child: &dyn Shape, parent: &dyn Shape) -> Result<bool> {
+    let mut seen = BTreeSet::new();
+    shape_is_subshape_of_inner(cx, child, parent, &mut seen)
+}
+
+fn shape_is_subshape_of_inner(
+    cx: &mut Cx,
+    child: &dyn Shape,
+    parent: &dyn Shape,
+    seen: &mut BTreeSet<ShapeIdentity>,
+) -> Result<bool> {
     if let (Some(child_id), Some(parent_id)) = (child.id(), parent.id())
         && child_id == parent_id
     {
@@ -564,6 +574,9 @@ pub fn shape_is_subshape_of(cx: &mut Cx, child: &dyn Shape, parent: &dyn Shape) 
     }
     if let Some(answer) = child.is_subshape_of(cx, parent)? {
         return Ok(answer);
+    }
+    if !seen.insert(shape_identity(child)) {
+        return Ok(false);
     }
     if matches!(
         parent.symbol(),
@@ -578,11 +591,28 @@ pub fn shape_is_subshape_of(cx: &mut Cx, child: &dyn Shape, parent: &dyn Shape) 
         let Some(candidate) = candidate.object().as_shape() else {
             continue;
         };
-        if shape_is_subshape_of(cx, candidate, parent)? {
+        if shape_is_subshape_of_inner(cx, candidate, parent, seen)? {
             return Ok(true);
         }
     }
     Ok(false)
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
+enum ShapeIdentity {
+    Id(ShapeId),
+    Symbol(Symbol),
+    Pointer(usize),
+}
+
+fn shape_identity(shape: &dyn Shape) -> ShapeIdentity {
+    if let Some(id) = shape.id() {
+        return ShapeIdentity::Id(id);
+    }
+    if let Some(symbol) = shape.symbol() {
+        return ShapeIdentity::Symbol(symbol);
+    }
+    ShapeIdentity::Pointer(shape as *const dyn Shape as *const () as usize)
 }
 
 fn shape_match_table(cx: &mut Cx, matched: &ShapeMatch) -> Result<Value> {
