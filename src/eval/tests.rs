@@ -4,8 +4,10 @@ use std::sync::{
 };
 
 use crate::{
-    Demand, EagerPolicy, EvalPolicy, PreparedArgs, Result, StrictNames, Symbol, Thunk, ThunkObject,
+    Demand, EagerPolicy, EvalPolicy, MacroExpander, NoopEvalPolicy, Phase, PreparedArgs, Result,
+    StrictNames, Symbol, Thunk, ThunkObject,
     callable::Callable,
+    capability::macro_expansion_capability_for_phase,
     env::Cx,
     error::Error,
     expr::Expr,
@@ -188,6 +190,17 @@ impl EvalPolicy for RejectUnboundNamesPolicy {
     }
 }
 
+struct CountingMacroExpander {
+    calls: Arc<AtomicUsize>,
+}
+
+impl MacroExpander for CountingMacroExpander {
+    fn expand_expr(&self, _cx: &mut Cx, _phase: Phase, _expr: Expr) -> Result<Expr> {
+        self.calls.fetch_add(1, Ordering::SeqCst);
+        Ok(expanded_macro_expr())
+    }
+}
+
 fn test_cx() -> Cx {
     Cx::new(Arc::new(EagerPolicy), Arc::new(DefaultFactory))
 }
@@ -204,6 +217,68 @@ fn registered_shape(cx: &mut Cx, name: &str, accepted: bool) -> ShapeId {
     cx.registry_mut()
         .register_shape_value(Symbol::qualified("test", name), shape)
         .unwrap()
+}
+
+fn macro_input_expr() -> Expr {
+    Expr::Symbol(Symbol::qualified("macro-test", "input"))
+}
+
+fn expanded_macro_expr() -> Expr {
+    Expr::Symbol(Symbol::qualified("macro-test", "expanded"))
+}
+
+#[test]
+fn noop_policy_denies_macro_expansion_before_expander_runs() {
+    let calls = Arc::new(AtomicUsize::new(0));
+    let mut cx = Cx::new(Arc::new(NoopEvalPolicy), Arc::new(DefaultFactory));
+    cx.set_macro_expander(Arc::new(CountingMacroExpander {
+        calls: calls.clone(),
+    }));
+
+    let err = cx
+        .expand_macros(Phase::Expand, macro_input_expr())
+        .unwrap_err();
+
+    assert!(
+        matches!(err, Error::Eval(message) if message.contains("macro expansion denied by eval policy noop"))
+    );
+    assert_eq!(calls.load(Ordering::SeqCst), 0);
+}
+
+#[test]
+fn policy_allowed_macro_expansion_requires_phase_capability() {
+    let calls = Arc::new(AtomicUsize::new(0));
+    let mut cx = test_cx();
+    cx.set_macro_expander(Arc::new(CountingMacroExpander {
+        calls: calls.clone(),
+    }));
+
+    let err = cx
+        .expand_macros(Phase::Compile, macro_input_expr())
+        .unwrap_err();
+
+    assert!(matches!(
+        err,
+        Error::CapabilityDenied { capability }
+            if capability == macro_expansion_capability_for_phase(Phase::Compile)
+    ));
+    assert_eq!(calls.load(Ordering::SeqCst), 0);
+}
+
+#[test]
+fn macro_expansion_runs_with_policy_and_capability() {
+    let calls = Arc::new(AtomicUsize::new(0));
+    let (mut cx, seat) = Cx::new_seated(Arc::new(EagerPolicy), Arc::new(DefaultFactory));
+    seat.grant(&mut cx, macro_expansion_capability_for_phase(Phase::Eval))
+        .unwrap();
+    cx.set_macro_expander(Arc::new(CountingMacroExpander {
+        calls: calls.clone(),
+    }));
+
+    let expanded = cx.expand_macros(Phase::Eval, macro_input_expr()).unwrap();
+
+    assert_eq!(expanded, expanded_macro_expr());
+    assert_eq!(calls.load(Ordering::SeqCst), 1);
 }
 
 #[test]

@@ -209,6 +209,10 @@ pub enum Error {
         /// The caller's trust level.
         trust: TrustLevel,
     },
+    /// A host grant seat was used with a different context than the one it was
+    /// minted for.
+    #[error("grant seat cannot grant into a foreign Cx")]
+    ForeignGrantSeat,
     /// A codec failed to read or write a form.
     #[error("codec error in {codec:?}: {message}")]
     CodecError {

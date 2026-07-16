@@ -8,6 +8,7 @@ use std::{collections::BTreeSet, fmt, sync::Arc};
 
 use crate::{
     error::{Error, Result},
+    eval::Phase,
     id::Symbol,
 };
 
@@ -96,17 +97,17 @@ impl GrantSeat {
     /// from granting itself a capability.
     ///
     /// [`Cx::new_seated`]: crate::Cx::new_seated
-    pub fn grant(&self, cx: &mut crate::Cx, capability: CapabilityName) {
-        assert!(
-            self.cx_id == 0 || self.cx_id == cx.grant_id(),
-            "a GrantSeat may only grant into the Cx it was minted with"
-        );
+    pub fn grant(&self, cx: &mut crate::Cx, capability: CapabilityName) -> Result<()> {
+        if self.cx_id != 0 && self.cx_id != cx.grant_id() {
+            return Err(Error::ForeignGrantSeat);
+        }
         cx.grant_from_host(capability);
+        Ok(())
     }
 
     /// Grants a capability named by a static string into `cx`.
-    pub fn grant_named(&self, cx: &mut crate::Cx, capability: &'static str) {
-        self.grant(cx, CapabilityName::new(capability));
+    pub fn grant_named(&self, cx: &mut crate::Cx, capability: &'static str) -> Result<()> {
+        self.grant(cx, CapabilityName::new(capability))
     }
 }
 
@@ -246,6 +247,16 @@ pub fn native_dynamic_load_capability() -> CapabilityName {
 /// The capability gating macro expansion (`macro.expand`).
 pub fn macro_expand_capability() -> CapabilityName {
     CapabilityName::new("macro.expand")
+}
+
+/// The phase-specific capability required to run macro expansion.
+pub fn macro_expansion_capability_for_phase(phase: Phase) -> CapabilityName {
+    match phase {
+        Phase::Read => macro_expand_read_capability(),
+        Phase::Expand => macro_expand_capability(),
+        Phase::Compile => macro_expand_compile_capability(),
+        Phase::Eval => macro_expand_eval_capability(),
+    }
 }
 
 /// The capability gating compile-phase macro expansion (`macro.expand.compile`).
@@ -422,12 +433,11 @@ mod tests {
         let (mut cx, seat) = Cx::new_seated(Arc::new(NoopEvalPolicy), Arc::new(DefaultFactory));
         // A freshly seated context grants nothing until the host uses the seat.
         assert!(cx.require(&cap).is_err());
-        seat.grant(&mut cx, cap.clone());
+        seat.grant(&mut cx, cap.clone()).unwrap();
         assert!(cx.require(&cap).is_ok());
     }
 
     #[test]
-    #[should_panic(expected = "minted with")]
     fn a_seat_cannot_grant_into_a_foreign_cx() {
         use std::sync::Arc;
 
@@ -440,7 +450,10 @@ mod tests {
             Cx::new_seated(Arc::new(NoopEvalPolicy), Arc::new(DefaultFactory));
         let (_throwaway, forged) =
             Cx::new_seated(Arc::new(NoopEvalPolicy), Arc::new(DefaultFactory));
-        forged.grant(&mut victim, read_eval_capability()); // panics: foreign Cx
+        assert!(matches!(
+            forged.grant(&mut victim, read_eval_capability()),
+            Err(Error::ForeignGrantSeat)
+        ));
     }
 
     #[cfg(feature = "test-support")]

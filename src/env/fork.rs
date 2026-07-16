@@ -33,7 +33,8 @@ impl Cx {
             fork.set_macro_expander(expander);
         }
         for capability in self.capabilities().iter() {
-            seat.grant(&mut fork, capability.clone());
+            seat.grant(&mut fork, capability.clone())
+                .expect("fork seat grants into its own Cx");
         }
         fork
     }

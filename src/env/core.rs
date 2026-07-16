@@ -5,7 +5,10 @@ use std::sync::{
 
 use crate::{
     ContentId,
-    capability::{CapabilityName, CapabilitySet, GrantSeat, read_construct_capability},
+    capability::{
+        CapabilityName, CapabilitySet, GrantSeat, macro_expansion_capability_for_phase,
+        read_construct_capability,
+    },
     control::{ControlPolicy, ControlPolicyRef, NoopControlPolicy},
     datum_store::BTreeDatumStore,
     effect_ledger::EffectLedger,
@@ -427,10 +430,18 @@ impl Cx {
 
     /// Expands macros in `expr` for the given phase, or returns it unchanged.
     pub fn expand_macros(&mut self, phase: Phase, expr: Expr) -> Result<Expr> {
-        match self.macro_expander.clone() {
-            Some(expander) => expander.expand_expr(self, phase, expr),
-            None => Ok(expr),
+        let Some(expander) = self.macro_expander.clone() else {
+            return Ok(expr);
+        };
+        let eval_policy = self.eval_policy_ref();
+        if !eval_policy.allow_macro_expansion(phase) {
+            return Err(Error::Eval(format!(
+                "macro expansion denied by eval policy {} for {phase:?}",
+                eval_policy.name()
+            )));
         }
+        self.require(&macro_expansion_capability_for_phase(phase))?;
+        expander.expand_expr(self, phase, expr)
     }
 
     /// Returns the accumulated diagnostics.

@@ -470,7 +470,7 @@ fn fork_from_seed_reproduces_capabilities_and_copied_content() {
 
     // A capability granted through the seed's host seat.
     let cap = CapabilityName::new("fork-test-cap");
-    seat.grant(&mut seed, cap.clone());
+    seat.grant(&mut seed, cap.clone()).unwrap();
 
     // Some copied env content and copied registry content.
     let binding = Symbol::qualified("fork", "binding-test");
