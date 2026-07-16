@@ -243,15 +243,15 @@ capability-gated test execution live in the browse library, not in this kernel.
 - Hidden data is represented by Redaction values, never by silently omitting a
   known field. Replacing structured data with display-only strings is a breaking
   change.
-- Browse and test surfaces are capability-gated. The kernel defines the
-  capability tokens; the library enforces them:
+- Browse and test surfaces are capability-gated by library-owned tokens.
+  Browse libraries mint and enforce:
   - `browse.read`: optional ordinary browse gate.
   - `browse.run-tests`: required to execute tests (otherwise test descriptions
     stay visible but execution fails closed with `CapabilityDenied`).
   - `browse.internal`: required to reveal private runtime internals and host
     detail.
-  - `registry.catalog.read`: required to read the registry catalog view exposed
-    through the `registry/catalog` facet.
+  The kernel-owned `registry.catalog.read` capability gates only the registry
+  catalog view exposed through the `registry/catalog` facet.
 
 ## Contract: kernel feature contract
 
@@ -329,9 +329,10 @@ eval; transport selection is library and policy concern.
 `Lib` is the contract for every extension point. A `LibManifest` carries id,
 `Version`, `AbiVersion`, `LibTarget`, dependencies, requested capabilities, and
 `Export` declarations. `ExportKind` covers classes, functions, macros, shapes,
-codecs, number domains, and values; resolution produces `ExportRecord`/
-`ExportState` rows. `Registry` and `Linker` handle registration, lookup,
-topological dependency resolution, and catalog-backed identity storage.
+codecs, number domains, values, opaque sites, and open declarations; resolution
+produces `ExportRecord`/`ExportState` rows. `Registry` and `Linker` handle
+registration, lookup, topological dependency resolution, and catalog-backed
+identity storage.
 
 ### Capabilities and trust
 
@@ -340,14 +341,15 @@ topological dependency resolution, and catalog-backed identity storage.
 `HostInternal`): an untrusted context denies `read-eval` even when the
 capability is granted. Kernel capability tokens include `read-construct`,
 `read-eval`, `loader.native`, the `macro.expand*` family, `eval.fabric` /
-`eval.remote`, the `control.*` family, `kernel.fact.private`, the `browse.*`
-family, the runtime-storage gates (`config.list.impl`, `config.table.impl`,
-`list.force.unbounded`, `table.remote`), and the `logic.*` library gates.
-Capabilities are ordinary, inspectable runtime data, not static strings, and
-must be checked before privileged operations. `CapabilitySet::intersect` and
-`diminish(current, allowed)` compute monotone subsets for explicit narrowed
-runs: the result contains only capabilities present in both inputs and never
-adds authority the caller did not already hold.
+`eval.remote`, the `control.*` family, `kernel.fact.private`,
+`list.force.unbounded`, and `registry.catalog.read`. Libraries mint
+behavior-specific tokens such as browse, storage, configured-backend,
+remote-table, and logic capabilities. Capabilities are ordinary, inspectable
+runtime data, not static strings, and must be checked before privileged
+operations. `CapabilitySet::intersect` and `diminish(current, allowed)` compute
+monotone subsets for explicit narrowed runs: the result contains only
+capabilities present in both inputs and never adds authority the caller did not
+already hold.
 
 ### Stable ids and ABI transport
 

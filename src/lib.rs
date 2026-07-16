@@ -118,7 +118,7 @@ pub use datum::{
     DATUM_CONTENT_ALGORITHM_NAME, DATUM_CONTENT_ALGORITHM_NAMESPACE, Datum, datum_content_algorithm,
 };
 pub use datum_store::{BTreeDatumStore, DatumStore};
-pub use effect::{Effect, effect_abort_op_key, effect_resume_op_key, effect_test_run_kind};
+pub use effect::{Effect, effect_abort_op_key, effect_resume_op_key};
 pub use encode::{
     CanonicalPolicy, ConstructorSurface, EncodeOptions, EncodePosition, ObjectEncode,
     ObjectEncoding, ReadConstructEncodePolicy, ReadConstructor, ReadEvalEncodePolicy, WriteCx,

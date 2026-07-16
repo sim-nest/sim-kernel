@@ -1,7 +1,7 @@
 //! The effect contract: capability-gated requests resolved by an implementation.
 //!
 //! The kernel defines the [`Effect`] record, its replay-key identity, and the
-//! well-known effect kinds; libraries supply the handlers that perform effects.
+//! control effect protocol. Libraries mint behavior-specific effect kinds.
 
 use crate::{
     capability::CapabilityName,
@@ -123,15 +123,12 @@ pub struct EffectRecord {
 /// # use std::sync::Arc;
 /// # use sim_kernel::{DefaultFactory, NoopEvalPolicy};
 /// # use sim_kernel::env::Cx;
-/// # use sim_kernel::effect::{
-/// #     Effect, resolve_effect, effect_tool_call_kind, effect_resume_op_key,
-/// #     effect_abort_op_key,
-/// # };
+/// # use sim_kernel::effect::{Effect, resolve_effect, effect_resume_op_key, effect_abort_op_key};
 /// # use sim_kernel::id::Symbol;
 /// # use sim_kernel::ref_id::Ref;
 /// let mut cx = Cx::new(Arc::new(NoopEvalPolicy), Arc::new(DefaultFactory));
 /// let effect = Effect::new(
-///     effect_tool_call_kind(),
+///     Symbol::qualified("effect", "tool-call"),
 ///     Ref::Symbol(Symbol::qualified("test", "tool")),
 ///     Ref::Symbol(Symbol::new("input")),
 ///     Ref::Symbol(Symbol::qualified("core", "Any")),
@@ -240,64 +237,9 @@ pub fn effect_replay_preimage(effect: &Effect, implementation: Option<Ref>) -> D
     }
 }
 
-/// Well-known kind symbol for tool-call effects.
-pub fn effect_tool_call_kind() -> Symbol {
-    effect_symbol("tool-call")
-}
-
-/// Well-known kind symbol for model-inference effects.
-pub fn effect_model_infer_kind() -> Symbol {
-    effect_symbol("model-infer")
-}
-
-/// Well-known kind symbol for host-process effects.
-pub fn effect_host_process_kind() -> Symbol {
-    effect_symbol("host-process")
-}
-
-/// Well-known kind symbol for network effects.
-pub fn effect_network_kind() -> Symbol {
-    effect_symbol("network")
-}
-
-/// Well-known kind symbol for filesystem effects.
-pub fn effect_filesystem_kind() -> Symbol {
-    effect_symbol("filesystem")
-}
-
-/// Well-known kind symbol for time effects.
-pub fn effect_time_kind() -> Symbol {
-    effect_symbol("time")
-}
-
-/// Well-known kind symbol for randomness effects.
-pub fn effect_random_kind() -> Symbol {
-    effect_symbol("random")
-}
-
-/// Well-known kind symbol for remote-realize effects.
-pub fn effect_remote_realize_kind() -> Symbol {
-    effect_symbol("remote-realize")
-}
-
-/// Well-known kind symbol for test-run effects.
-pub fn effect_test_run_kind() -> Symbol {
-    effect_symbol("test-run")
-}
-
 /// Well-known kind symbol for control-prompt effects.
 pub fn effect_control_prompt_kind() -> Symbol {
     effect_symbol("control-prompt")
-}
-
-/// Well-known kind symbol for device-read effects.
-pub fn effect_device_read_kind() -> Symbol {
-    effect_symbol("device-read")
-}
-
-/// Well-known kind symbol for device-write effects.
-pub fn effect_device_write_kind() -> Symbol {
-    effect_symbol("device-write")
 }
 
 /// Well-known kind symbol for control-capture effects.
@@ -323,6 +265,11 @@ pub fn effect_resume_op_key() -> OpKey {
 /// Operation key effects use to abort a handler.
 pub fn effect_abort_op_key() -> OpKey {
     OpKey::new(effect_symbol("control"), Symbol::new("abort"), 1)
+}
+
+#[cfg(test)]
+fn effect_test_kind(name: &str) -> Symbol {
+    effect_symbol(name)
 }
 
 fn record_effect_failure(cx: &mut Cx, effect: Ref, err: &Error) -> Result<()> {
@@ -431,7 +378,7 @@ mod tests {
 
     fn effect(input: Ref) -> Effect {
         Effect::new(
-            effect_tool_call_kind(),
+            effect_test_kind("tool-call"),
             Ref::Symbol(Symbol::qualified("test", "tool")),
             input,
             Ref::Symbol(core_symbol("Any")),
