@@ -1,8 +1,9 @@
 //! Shared test-context constructors.
 //!
-//! Almost every crate's test module hand-rolled the same `fn cx() -> Cx`. These
-//! are the two canonical shapes that duplication collapsed to (OVERLAP6.16);
-//! a test helper routes here with `use sim_kernel::testing::bare_cx as cx;`.
+//! Use these helpers instead of hand-rolling local `Cx` constructors in tests.
+//! The two constructors cover structure-only tests and eager-evaluation tests;
+//! a test module can route through them with
+//! `use sim_kernel::testing::bare_cx as cx;`.
 
 use std::sync::Arc;
 

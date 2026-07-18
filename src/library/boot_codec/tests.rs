@@ -21,9 +21,9 @@ fn codec_source_target_round_trips_through_the_manifest_codec() {
 }
 
 #[test]
-fn legacy_lisp_source_tag_still_decodes_to_codec_source() {
-    // A pre-CodecSource manifest serialized the lisp codec as the closed
-    // symbol `lisp-source`; it must still load.
+fn unqualified_lisp_source_tag_decodes_to_codec_source() {
+    // The `lisp-source` wire tag is accepted as a closed spelling for the
+    // loadable Lisp codec source.
     let datum = manifest_datum(&sample_manifest(LibTarget::HostRegistered));
     let Datum::Node { tag, fields } = datum else {
         panic!("manifest datum is a node");
@@ -41,7 +41,7 @@ fn legacy_lisp_source_tag_still_decodes_to_codec_source() {
             })
             .collect(),
     };
-    let decoded = manifest_from_datum(&patched).expect("decode legacy manifest");
+    let decoded = manifest_from_datum(&patched).expect("decode unqualified manifest");
     assert_eq!(
         decoded.target,
         LibTarget::CodecSource(Symbol::qualified("codec", "lisp"))

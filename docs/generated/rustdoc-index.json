@@ -13,7 +13,7 @@
       "group": "workspace",
       "manifest": "xtask/Cargo.toml",
       "package": "xtask",
-      "summary": "SIM workspace package for xtask."
+      "summary": "Repository-local validation commands for sim-kernel."
     }
   ]
 }

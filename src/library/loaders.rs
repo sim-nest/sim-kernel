@@ -56,9 +56,19 @@ impl LoadCx {
         self.registry.fresh_class_id()
     }
 
+    /// Reserves a fresh stable class id, reporting catalog sequence failures.
+    pub fn try_fresh_class_id(&mut self) -> Result<ClassId> {
+        self.registry.try_fresh_class_id()
+    }
+
     /// Reserves a fresh stable function id.
     pub fn fresh_function_id(&mut self) -> FunctionId {
         self.registry.fresh_function_id()
+    }
+
+    /// Reserves a fresh stable function id, reporting catalog sequence failures.
+    pub fn try_fresh_function_id(&mut self) -> Result<FunctionId> {
+        self.registry.try_fresh_function_id()
     }
 
     /// Reserves a fresh stable macro id.
@@ -66,9 +76,19 @@ impl LoadCx {
         self.registry.fresh_macro_id()
     }
 
+    /// Reserves a fresh stable macro id, reporting catalog sequence failures.
+    pub fn try_fresh_macro_id(&mut self) -> Result<MacroId> {
+        self.registry.try_fresh_macro_id()
+    }
+
     /// Reserves a fresh stable case id.
     pub fn fresh_case_id(&mut self) -> CaseId {
         self.registry.fresh_case_id()
+    }
+
+    /// Reserves a fresh stable case id, reporting catalog sequence failures.
+    pub fn try_fresh_case_id(&mut self) -> Result<CaseId> {
+        self.registry.try_fresh_case_id()
     }
 
     /// Reserves a fresh stable shape id.
@@ -76,14 +96,30 @@ impl LoadCx {
         self.registry.fresh_shape_id()
     }
 
+    /// Reserves a fresh stable shape id, reporting catalog sequence failures.
+    pub fn try_fresh_shape_id(&mut self) -> Result<ShapeId> {
+        self.registry.try_fresh_shape_id()
+    }
+
     /// Reserves a fresh stable codec id.
     pub fn fresh_codec_id(&mut self) -> CodecId {
         self.registry.fresh_codec_id()
     }
 
+    /// Reserves a fresh stable codec id, reporting catalog sequence failures.
+    pub fn try_fresh_codec_id(&mut self) -> Result<CodecId> {
+        self.registry.try_fresh_codec_id()
+    }
+
     /// Reserves a fresh stable number-domain id.
     pub fn fresh_number_domain_id(&mut self) -> NumberDomainId {
         self.registry.fresh_number_domain_id()
+    }
+
+    /// Reserves a fresh stable number-domain id, reporting catalog sequence
+    /// failures.
+    pub fn try_fresh_number_domain_id(&mut self) -> Result<NumberDomainId> {
+        self.registry.try_fresh_number_domain_id()
     }
 
     /// Checks that the given capability is granted, returning

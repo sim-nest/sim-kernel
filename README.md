@@ -371,8 +371,9 @@ library concerns.
 `sim-kernel` builds and tests from a lone clone (it is the dependency root); the rest of the constellation builds together in the workspace.
 
 ```bash
-cargo fmt --check && cargo test && cargo clippy -- -D warnings && cargo doc --no-deps
+cargo fmt --all --check && cargo test && cargo clippy --all-targets -- -D warnings && cargo doc --no-deps
 cargo run -p xtask -- simdoc --check
+cargo run -p xtask -- check-file-sizes
 ```
 
 ## Documentation lanes
@@ -383,6 +384,11 @@ cargo run -p xtask -- simdoc --check
 - Agent cards: `docs/agents/cards.jsonl` and `docs/agents/card-index.json`
 - Human docs: `docs/humans/`
 - Diagrams: `docs/diagrams/src/` and `docs/diagrams/generated/`
+
+Generated browse cards for the kernel protocol appear in
+`docs/generated/card-index.json`. The `docs/agents/` lane is the authored-card
+input lane; it is empty because the kernel publishes protocol cards from source
+facts and generated contract data instead of separate authored card files.
 
 The same command writes split contract files under `docs/generated/`. Everything
 under `docs/` is generated; do not hand-edit it.

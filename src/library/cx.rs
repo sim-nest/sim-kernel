@@ -33,7 +33,7 @@ impl Cx {
             }
         }
         let trusted = matches!(manifest.target, LibTarget::HostRegistered);
-        let mut txn = self.registry.begin_load(manifest, trusted);
+        let mut txn = self.registry.try_begin_load(manifest, trusted)?;
         {
             let mut load_cx = self.load_cx();
             let mut linker = txn.linker();

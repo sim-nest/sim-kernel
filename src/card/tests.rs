@@ -36,7 +36,7 @@ fn table_keys(expr: &Expr) -> Vec<Symbol> {
 }
 
 #[test]
-fn card_v1_field_order_is_stable() {
+fn card_fixed_field_order_is_stable() {
     let mut cx = cx();
     let subject = Ref::Symbol(Symbol::qualified("test", "ordered"));
 

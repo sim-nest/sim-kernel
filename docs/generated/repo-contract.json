@@ -34,7 +34,7 @@
     {
       "crate_name": "sim_kernel",
       "dependencies": [],
-      "description": "SIM workspace package for sim kernel.",
+      "description": "Small protocol kernel contracts for the expandable SIM Rust runtime.",
       "features": [
         {
           "edges": [],
@@ -67,14 +67,14 @@
     {
       "crate_name": "xtask",
       "dependencies": [],
-      "description": "SIM workspace package for xtask.",
+      "description": "Repository-local validation commands for sim-kernel.",
       "features": [],
       "group": "workspace",
       "manifest": "xtask/Cargo.toml",
       "name": "xtask",
       "publish": "false",
       "root": "xtask",
-      "rustdoc_summary": "SIM workspace package for xtask.",
+      "rustdoc_summary": "Repository-local validation commands for sim-kernel.",
       "target_kinds": [
         "bin"
       ],
@@ -97,10 +97,10 @@
     "generated_by": "cargo run -p xtask -- simdoc",
     "generation_timestamp": "2026-07-14T23:28:48+02:00",
     "generator": "xtask repo-contract v1",
-    "git_commit": "841bb3ee55551318085f3d884e4f686c7209468a",
+    "git_commit": "44ac0adc5fbfc32a26cd6a1e7f7c068a5f17321b",
     "repo": "sim-kernel",
     "schema": "sim.provenance.v1",
-    "source_commit": "841bb3ee55551318085f3d884e4f686c7209468a",
+    "source_commit": "44ac0adc5fbfc32a26cd6a1e7f7c068a5f17321b",
     "source_remote": "https://github.com/sim-nest/sim-kernel",
     "validation_commands": [
       "cargo fmt --all --check",
@@ -113,7 +113,7 @@
       "cargo run -p xtask -- validation-matrix --check --repo .",
       "cargo run -p xtask -- crate-catalog --check --repo ."
     ],
-    "workspace_hash": "a480c3e59fd0f351",
+    "workspace_hash": "1a503bf850eb461f",
     "workspace_hash_algorithm": "fnv1a64",
     "workspace_hash_input_count": 128,
     "workspace_hash_inputs": [

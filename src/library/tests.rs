@@ -364,8 +364,8 @@ fn commit_rejects_undeclared_export_records() {
     txn.linker()
         .unsupported_export(
             ExportKind::named(ExportKind::CODEC),
-            Symbol::new("future-codec"),
-            "not implemented",
+            Symbol::new("unsupported-codec"),
+            "unsupported by this target",
         )
         .unwrap();
 
@@ -374,7 +374,7 @@ fn commit_rejects_undeclared_export_records() {
         err,
         Error::UndeclaredExportRecord { kind, symbol }
             if kind == ExportKind::named(ExportKind::CODEC)
-                && symbol == Symbol::new("future-codec")
+                && symbol == Symbol::new("unsupported-codec")
     ));
 }
 
@@ -384,7 +384,7 @@ fn commit_keeps_declared_unsupported_export_records() {
     let mut txn = registry.begin_load(
         LibManifest {
             exports: vec![Export::Codec {
-                symbol: Symbol::new("future-codec"),
+                symbol: Symbol::new("unsupported-codec"),
                 codec_id: None,
             }],
             ..manifest("declared-lib", "0.1.0")
@@ -394,8 +394,8 @@ fn commit_keeps_declared_unsupported_export_records() {
     txn.linker()
         .unsupported_export(
             ExportKind::named(ExportKind::CODEC),
-            Symbol::new("future-codec"),
-            "not implemented",
+            Symbol::new("unsupported-codec"),
+            "unsupported by this target",
         )
         .unwrap();
 
@@ -403,7 +403,7 @@ fn commit_keeps_declared_unsupported_export_records() {
     let loaded = registry.lib(&Symbol::new("declared-lib")).unwrap();
     assert!(loaded.exports.iter().any(|record| {
         record.kind == ExportKind::named(ExportKind::CODEC)
-            && record.symbol == Symbol::new("future-codec")
+            && record.symbol == Symbol::new("unsupported-codec")
             && matches!(record.state, ExportState::Unsupported { .. })
     }));
 }

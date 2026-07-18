@@ -367,7 +367,7 @@ impl Dir for TestDir {
 }
 
 #[test]
-fn k6_17_adapters_resolve_for_newly_deprecated_accessor_families() {
+fn adapters_resolve_for_protocol_backed_accessor_families() {
     let mut cx = Cx::stub();
     let cases = vec![
         (
@@ -459,7 +459,7 @@ fn adapter_backed_loaded_values_publish_ops_claimed_by_resolve_op() {
 }
 
 #[test]
-fn k6_17_adapters_invoke_legacy_protocols_without_new_object_methods() {
+fn adapters_invoke_protocol_methods_without_object_overrides() {
     let mut cx = Cx::stub();
     cx.grant_from_host(read_construct_capability());
 

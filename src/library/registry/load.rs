@@ -147,15 +147,21 @@ impl Registry {
     /// let _ = id;
     /// ```
     pub fn begin_load(&self, manifest: LibManifest, trusted: bool) -> LoadTransaction {
+        self.try_begin_load(manifest, trusted)
+            .unwrap_or_else(|err| panic!("{err}"))
+    }
+
+    /// Starts a load transaction, reporting catalog sequence allocation errors.
+    pub fn try_begin_load(&self, manifest: LibManifest, trusted: bool) -> Result<LoadTransaction> {
         let mut registry = self.clone();
-        let lib_id = registry.fresh_lib_id();
-        LoadTransaction {
+        let lib_id = registry.try_fresh_lib_id()?;
+        Ok(LoadTransaction {
             lib_id,
             manifest,
             trusted,
             registry,
             pending: PendingExports::default(),
-        }
+        })
     }
 
     /// Commits a [`LoadTransaction`], folding its staged registrations into this

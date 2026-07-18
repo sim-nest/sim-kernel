@@ -35,6 +35,10 @@ fn locate_sim_tooling_manifest(repo_root: &Path) -> Result<PathBuf, String> {
     if let Ok(path) = env::var("SIMDOC_TOOLING_MANIFEST") {
         return Ok(PathBuf::from(path));
     }
+    let nested = repo_root.join("sim-tooling").join("Cargo.toml");
+    if nested.is_file() {
+        return Ok(nested);
+    }
     let sibling = repo_root
         .parent()
         .unwrap_or(repo_root)
@@ -43,5 +47,8 @@ fn locate_sim_tooling_manifest(repo_root: &Path) -> Result<PathBuf, String> {
     if sibling.is_file() {
         return Ok(sibling);
     }
-    Err("set SIMDOC_TOOLING_MANIFEST to the sim-tooling Cargo.toml".to_owned())
+    Err(
+        "set SIMDOC_TOOLING_MANIFEST to the sim-tooling Cargo.toml, or checkout sim-tooling next to or under this repo"
+            .to_owned(),
+    )
 }

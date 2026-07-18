@@ -65,9 +65,8 @@ impl LibTarget {
 
     /// Reconstructs a target from its serialized [`Symbol`].
     ///
-    /// The unqualified closed tags map to their variants. The legacy
-    /// `lisp-source` tag is accepted for backward compatibility and decodes to
-    /// `CodecSource(codec/lisp)` so existing serialized manifests still load.
+    /// The unqualified closed tags map to their variants. The `lisp-source`
+    /// wire tag is accepted as a closed spelling for `CodecSource(codec/lisp)`.
     /// Any other symbol is treated as an open [`LibTarget::CodecSource`].
     pub fn from_symbol(symbol: &Symbol) -> Self {
         if symbol.namespace.is_none() {
@@ -76,8 +75,7 @@ impl LibTarget {
                 "wasm-component" => return LibTarget::WasmComponent,
                 "data-only" => return LibTarget::DataOnly,
                 "host-registered" => return LibTarget::HostRegistered,
-                // Legacy tag: pre-CodecSource manifests named the lisp codec by
-                // the closed string "lisp-source".
+                // Closed tag for the loadable Lisp codec source.
                 "lisp-source" => return LibTarget::CodecSource(Symbol::qualified("codec", "lisp")),
                 _ => {}
             }

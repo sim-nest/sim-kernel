@@ -85,7 +85,7 @@ impl<'a> Linker<'a> {
 
     /// Stages a class export under `symbol`, reserving a fresh class id.
     pub fn class(&mut self, symbol: Symbol) -> Result<ClassId> {
-        let id = self.registry.fresh_class_id();
+        let id = self.registry.try_fresh_class_id()?;
         self.pending.exports.push(Export::Class {
             symbol,
             class_id: Some(id),
@@ -96,7 +96,7 @@ impl<'a> Linker<'a> {
     /// Stages a class export under `symbol` using a caller-chosen class id,
     /// reserving the id sequence up to it.
     pub fn class_with_id(&mut self, symbol: Symbol, id: ClassId) -> Result<ClassId> {
-        self.registry.reserve_class_id(id);
+        self.registry.reserve_class_id(id)?;
         self.pending.exports.push(Export::Class {
             symbol,
             class_id: Some(id),
@@ -119,7 +119,7 @@ impl<'a> Linker<'a> {
 
     /// Stages a function export under `symbol`, reserving a fresh function id.
     pub fn function(&mut self, symbol: Symbol) -> Result<FunctionId> {
-        let id = self.registry.fresh_function_id();
+        let id = self.registry.try_fresh_function_id()?;
         self.pending.exports.push(Export::Function {
             symbol,
             function_id: Some(id),
@@ -142,7 +142,7 @@ impl<'a> Linker<'a> {
 
     /// Stages a macro export under `symbol`, reserving a fresh macro id.
     pub fn macro_export(&mut self, symbol: Symbol) -> Result<MacroId> {
-        let id = self.registry.fresh_macro_id();
+        let id = self.registry.try_fresh_macro_id()?;
         self.pending.exports.push(Export::Macro {
             symbol,
             macro_id: Some(id),
@@ -159,7 +159,7 @@ impl<'a> Linker<'a> {
 
     /// Stages a shape export under `symbol`, reserving a fresh shape id.
     pub fn shape(&mut self, symbol: Symbol) -> Result<ShapeId> {
-        let id = self.registry.fresh_shape_id();
+        let id = self.registry.try_fresh_shape_id()?;
         self.pending.exports.push(Export::Shape {
             symbol,
             shape_id: Some(id),
@@ -176,7 +176,7 @@ impl<'a> Linker<'a> {
 
     /// Stages a codec export under `symbol`, reserving a fresh codec id.
     pub fn codec(&mut self, symbol: Symbol) -> Result<CodecId> {
-        let id = self.registry.fresh_codec_id();
+        let id = self.registry.try_fresh_codec_id()?;
         self.pending.exports.push(Export::Codec {
             symbol,
             codec_id: Some(id),
@@ -193,7 +193,7 @@ impl<'a> Linker<'a> {
 
     /// Stages a number-domain export under `symbol`, reserving a fresh id.
     pub fn number_domain(&mut self, symbol: Symbol) -> Result<NumberDomainId> {
-        let id = self.registry.fresh_number_domain_id();
+        let id = self.registry.try_fresh_number_domain_id()?;
         self.pending.exports.push(Export::NumberDomain {
             symbol,
             number_domain_id: Some(id),
@@ -213,7 +213,7 @@ impl<'a> Linker<'a> {
     /// The registry stores the value under the export symbol; concrete
     /// `EvalSite` behavior belongs to libraries that query the site registry.
     pub fn site_value(&mut self, symbol: Symbol, value: Value) -> Result<RuntimeId> {
-        let site_id = self.registry.fresh_site_id();
+        let site_id = self.registry.try_fresh_site_id()?;
         let runtime_id = RuntimeId::Site(site_id);
         self.pending.exports.push(Export::Site {
             symbol,

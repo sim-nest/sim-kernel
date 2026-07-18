@@ -8,7 +8,7 @@ use crate::{
 };
 
 use super::{
-    export_row, exports_table, install_registry_catalog_schema, lib_row, libs_table,
+    SEQ_CLASS, export_row, exports_table, install_registry_catalog_schema, lib_row, libs_table,
     number_ops_table, plain_value_row, promotion_rules_table, runtime_table, runtime_value_row,
     schema::{
         field, lib_key, plain_value_key, registry_catalog_specs, runtime_key, sequence_key,
@@ -115,6 +115,43 @@ fn schema_uses_expected_write_policies() {
     for (table, policy) in expected {
         assert_eq!(store.table(&table).unwrap().policy, policy);
     }
+}
+
+#[test]
+fn try_fresh_id_reports_missing_sequence_row() {
+    let mut registry = Registry::default();
+    let kind = Symbol::new(SEQ_CLASS);
+    registry
+        .catalog
+        .delete_row(&sequences_table(), &sequence_key(&kind));
+
+    let err = registry.try_fresh_class_id().unwrap_err();
+
+    assert!(matches!(
+        err,
+        Error::CatalogSchema { table, message }
+            if table == sequences_table()
+                && message.contains("missing or malformed sequence row")
+                && message.contains(SEQ_CLASS)
+    ));
+}
+
+#[test]
+fn try_fresh_id_reports_u32_exhaustion() {
+    let mut registry = Registry::default();
+    registry
+        .set_catalog_sequence_next(SEQ_CLASS, u64::from(u32::MAX) + 1)
+        .unwrap();
+
+    let err = registry.try_fresh_class_id().unwrap_err();
+
+    assert!(matches!(
+        err,
+        Error::CatalogSchema { table, message }
+            if table == sequences_table()
+                && message.contains("sequence exceeded u32 id range")
+                && message.contains(SEQ_CLASS)
+    ));
 }
 
 #[test]
@@ -258,10 +295,10 @@ fn export_rows_encode_resolved_and_failure_states() {
 
     let unsupported = export_row(
         ExportKind::named(ExportKind::FUNCTION),
-        Symbol::new("future"),
+        Symbol::new("unsupported"),
         Symbol::new("demo-lib"),
         ExportState::Unsupported {
-            reason: "not implemented".to_owned(),
+            reason: "unsupported by this target".to_owned(),
         },
     );
     assert_eq!(
@@ -270,7 +307,7 @@ fn export_rows_encode_resolved_and_failure_states() {
     );
     assert_eq!(
         unsupported.data.get(&field("reason")),
-        Some(&Expr::String("not implemented".to_owned()))
+        Some(&Expr::String("unsupported by this target".to_owned()))
     );
 
     let invalid = export_row(
