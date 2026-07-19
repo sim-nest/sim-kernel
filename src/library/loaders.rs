@@ -1,8 +1,8 @@
 use std::cmp::Ordering;
-use std::path::PathBuf;
 use std::sync::Arc;
 
 use crate::{
+    Datum,
     capability::{CapabilityName, CapabilitySet},
     env::Cx,
     error::{Error, Result},
@@ -272,14 +272,22 @@ pub trait Lib {
 pub enum LibSource {
     /// A catalog-resolved library symbol.
     Symbol(Symbol),
-    /// A filesystem path.
-    Path(PathBuf),
-    /// A URL.
-    Url(String),
-    /// In-memory bytes (e.g. an ABI frame).
-    Bytes(Vec<u8>),
+    /// A loader-defined source carried as data.
+    Open {
+        /// Loader-defined source kind.
+        kind: Symbol,
+        /// Opaque payload interpreted by the loader that claims `kind`.
+        payload: Datum,
+    },
     /// A host-constructed library object.
     Host(Box<dyn Lib>),
+}
+
+impl LibSource {
+    /// Builds a loader-defined source carried as opaque data.
+    pub fn open(kind: Symbol, payload: Datum) -> Self {
+        Self::Open { kind, payload }
+    }
 }
 
 /// A catalog-registered source for a library symbol.
@@ -289,20 +297,26 @@ pub enum LibSource {
 /// on use.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum CatalogSource {
-    /// A filesystem path.
-    Path(PathBuf),
-    /// A URL.
-    Url(String),
-    /// In-memory bytes.
-    Bytes(Vec<u8>),
+    /// A loader-defined source carried as data.
+    Open {
+        /// Loader-defined source kind.
+        kind: Symbol,
+        /// Opaque payload interpreted by the loader that claims `kind`.
+        payload: Datum,
+    },
+}
+
+impl CatalogSource {
+    /// Builds a loader-defined catalog source carried as opaque data.
+    pub fn open(kind: Symbol, payload: Datum) -> Self {
+        Self::Open { kind, payload }
+    }
 }
 
 impl From<CatalogSource> for LibSource {
     fn from(source: CatalogSource) -> Self {
         match source {
-            CatalogSource::Path(path) => Self::Path(path),
-            CatalogSource::Url(url) => Self::Url(url),
-            CatalogSource::Bytes(bytes) => Self::Bytes(bytes),
+            CatalogSource::Open { kind, payload } => Self::Open { kind, payload },
         }
     }
 }
@@ -376,6 +390,10 @@ impl LoaderRegistry {
             LibSource::Symbol(symbol) => Err(Error::HostError(format!(
                 "no loader accepted lib source symbol {}",
                 symbol
+            ))),
+            LibSource::Open { kind, .. } => Err(Error::HostError(format!(
+                "no loader accepted lib source kind {}",
+                kind
             ))),
             _ => Err(Error::HostError("no loader accepted lib source".to_owned())),
         }
@@ -470,6 +488,10 @@ impl LoaderRegistry {
             LibSource::Symbol(symbol) => Err(Error::HostError(format!(
                 "no loader accepted lib source symbol {}",
                 symbol
+            ))),
+            LibSource::Open { kind, .. } => Err(Error::HostError(format!(
+                "no loader accepted lib source kind {} for inspection",
+                kind
             ))),
             _ => Err(Error::HostError(
                 "no loader accepted lib source for inspection".to_owned(),

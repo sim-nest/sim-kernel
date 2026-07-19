@@ -1,6 +1,6 @@
 use crate::library::{
-    AbiVersion, Dependency, Export, ExportKind, ExportState, LibManifest, LibTarget, Registry,
-    Version,
+    AbiVersion, Dependency, Export, ExportKind, ExportState, LibManifest, LibSourceSpec, LibTarget,
+    LoaderRegistry, Registry, Version,
 };
 use crate::{
     CORE_NIL_CLASS_ID, CaseId, ClassId, CodecId, Cx, Error, FunctionId, LibId, MacroId,
@@ -109,6 +109,28 @@ fn export_site_round_trips_symbol_and_kind() {
     assert_eq!(export.symbol(), &symbol);
     assert_eq!(export.kind(), "site");
     assert_eq!(export.kind_symbol(), ExportKind::named(ExportKind::SITE));
+}
+
+#[test]
+fn open_lib_source_without_claiming_loader_fails_at_load_time() {
+    let registry = LoaderRegistry::new();
+    let mut cx = Cx::stub();
+
+    let err = registry
+        .load_and_register_with_receipt(
+            &mut cx,
+            LibSourceSpec::Open {
+                kind: Symbol::qualified("loader", "unknown"),
+                payload: crate::Datum::String("opaque".to_owned()),
+            },
+        )
+        .unwrap_err();
+
+    assert!(matches!(
+        err,
+        Error::HostError(message)
+            if message == "no loader accepted lib source kind loader/unknown"
+    ));
 }
 
 // guards the registry catalog contract

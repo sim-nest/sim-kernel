@@ -100,3 +100,40 @@ fn open_export_declaration_rejects_stable_id() {
             if message == "open export kind surface/projection cannot carry stable-id"
     ));
 }
+
+#[test]
+fn open_lib_source_specs_round_trip_through_the_boot_codec() {
+    for source in [
+        LibSourceSpec::Open {
+            kind: Symbol::new("path"),
+            payload: Datum::String("./lib/example.simlib".to_owned()),
+        },
+        LibSourceSpec::Open {
+            kind: Symbol::new("url"),
+            payload: Datum::String("https://example.invalid/lib.simlib".to_owned()),
+        },
+        LibSourceSpec::Open {
+            kind: Symbol::new("content-address"),
+            payload: Datum::Node {
+                tag: Symbol::qualified("content", "address"),
+                fields: vec![
+                    (
+                        Symbol::new("algorithm"),
+                        Datum::Symbol(Symbol::qualified("core", "sha256-datum-v1")),
+                    ),
+                    (Symbol::new("digest"), Datum::Bytes(vec![1, 2, 3, 4])),
+                ],
+            },
+        },
+        LibSourceSpec::Open {
+            kind: Symbol::qualified("loader", "new-source"),
+            payload: Datum::Map(vec![(
+                Datum::Symbol(Symbol::new("opaque")),
+                Datum::String("payload".to_owned()),
+            )]),
+        },
+    ] {
+        let decoded = LibSourceSpec::from_datum(&source.to_datum()).expect("decode source");
+        assert_eq!(decoded, source);
+    }
+}

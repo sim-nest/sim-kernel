@@ -1,6 +1,4 @@
-use std::path::PathBuf;
-
-use crate::{ExportRecord, LibId, LibManifest, Symbol};
+use crate::{Datum, ExportRecord, LibId, LibManifest, Symbol};
 
 /// A data-only library source suitable for boot receipts.
 ///
@@ -12,12 +10,20 @@ use crate::{ExportRecord, LibId, LibManifest, Symbol};
 pub enum LibSourceSpec {
     /// A catalog-resolved library symbol.
     Symbol(Symbol),
-    /// A filesystem path.
-    Path(PathBuf),
-    /// A URL.
-    Url(String),
-    /// In-memory bytes.
-    Bytes(Vec<u8>),
+    /// A loader-defined source carried as data.
+    Open {
+        /// Loader-defined source kind.
+        kind: Symbol,
+        /// Opaque payload interpreted by the loader that claims `kind`.
+        payload: Datum,
+    },
+}
+
+impl LibSourceSpec {
+    /// Builds a loader-defined source carried as opaque data.
+    pub fn open(kind: Symbol, payload: Datum) -> Self {
+        Self::Open { kind, payload }
+    }
 }
 
 /// A loaded dependency edge recorded in a boot receipt.

@@ -1,5 +1,3 @@
-use std::path::PathBuf;
-
 use crate::{
     AbiVersion, CapabilityName, ClassId, CodecId, Datum, Error, Export, ExportKind, ExportRecord,
     ExportState, FunctionId, LibId, LibManifest, LibTarget, MacroId, NumberDomainId, Result,
@@ -119,12 +117,10 @@ impl LibSourceSpec {
     /// Encodes the source spec as canonical SIM data.
     pub fn to_datum(&self) -> Datum {
         match self {
-            Self::Symbol(symbol) => source_node("symbol", Datum::Symbol(symbol.clone())),
-            Self::Path(path) => {
-                source_node("path", Datum::String(path.to_string_lossy().into_owned()))
+            Self::Symbol(symbol) => {
+                source_node(Symbol::new("symbol"), Datum::Symbol(symbol.clone()))
             }
-            Self::Url(url) => source_node("url", Datum::String(url.clone())),
-            Self::Bytes(bytes) => source_node("bytes", Datum::Bytes(bytes.clone())),
+            Self::Open { kind, payload } => source_node(kind.clone(), payload.clone()),
         }
     }
 
@@ -135,12 +131,10 @@ impl LibSourceSpec {
         let value = required_field(fields, "value")?;
         match kind.name.as_ref() {
             "symbol" if kind.namespace.is_none() => Ok(Self::Symbol(expect_symbol(value)?.clone())),
-            "path" if kind.namespace.is_none() => {
-                Ok(Self::Path(PathBuf::from(expect_string(value)?)))
-            }
-            "url" if kind.namespace.is_none() => Ok(Self::Url(expect_string(value)?.to_owned())),
-            "bytes" if kind.namespace.is_none() => Ok(Self::Bytes(expect_bytes(value)?.to_vec())),
-            _ => Err(Error::Lib(format!("unknown lib source kind {kind}"))),
+            _ => Ok(Self::Open {
+                kind: kind.clone(),
+                payload: value.clone(),
+            }),
         }
     }
 }
@@ -148,9 +142,7 @@ impl LibSourceSpec {
 impl From<CatalogSource> for LibSourceSpec {
     fn from(source: CatalogSource) -> Self {
         match source {
-            CatalogSource::Path(path) => Self::Path(path),
-            CatalogSource::Url(url) => Self::Url(url),
-            CatalogSource::Bytes(bytes) => Self::Bytes(bytes),
+            CatalogSource::Open { kind, payload } => Self::Open { kind, payload },
         }
     }
 }
@@ -159,9 +151,7 @@ impl From<LibSourceSpec> for LibSource {
     fn from(source: LibSourceSpec) -> Self {
         match source {
             LibSourceSpec::Symbol(symbol) => Self::Symbol(symbol),
-            LibSourceSpec::Path(path) => Self::Path(path),
-            LibSourceSpec::Url(url) => Self::Url(url),
-            LibSourceSpec::Bytes(bytes) => Self::Bytes(bytes),
+            LibSourceSpec::Open { kind, payload } => Self::Open { kind, payload },
         }
     }
 }
@@ -172,9 +162,7 @@ impl TryFrom<LibSource> for LibSourceSpec {
     fn try_from(source: LibSource) -> Result<Self> {
         match source {
             LibSource::Symbol(symbol) => Ok(Self::Symbol(symbol)),
-            LibSource::Path(path) => Ok(Self::Path(path)),
-            LibSource::Url(url) => Ok(Self::Url(url)),
-            LibSource::Bytes(bytes) => Ok(Self::Bytes(bytes)),
+            LibSource::Open { kind, payload } => Ok(Self::Open { kind, payload }),
             LibSource::Host(_) => Err(Error::Lib(
                 "host lib sources are live values, not boot data".to_owned(),
             )),
@@ -471,10 +459,10 @@ fn required_id(value: Option<u32>, kind: &Symbol) -> Result<u32> {
     value.ok_or_else(|| Error::Lib(format!("runtime id kind {kind} requires an id")))
 }
 
-fn source_node(kind: &'static str, value: Datum) -> Datum {
+fn source_node(kind: Symbol, value: Datum) -> Datum {
     node(
         "lib-source",
-        vec![("kind", Datum::Symbol(Symbol::new(kind))), ("value", value)],
+        vec![("kind", Datum::Symbol(kind)), ("value", value)],
     )
 }
 
@@ -549,16 +537,6 @@ fn expect_string(datum: &Datum) -> Result<&str> {
         Datum::String(value) => Ok(value),
         other => Err(Error::TypeMismatch {
             expected: "datum string",
-            found: datum_kind(other),
-        }),
-    }
-}
-
-fn expect_bytes(datum: &Datum) -> Result<&[u8]> {
-    match datum {
-        Datum::Bytes(value) => Ok(value),
-        other => Err(Error::TypeMismatch {
-            expected: "datum bytes",
             found: datum_kind(other),
         }),
     }
