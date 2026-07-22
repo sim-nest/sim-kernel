@@ -17,7 +17,7 @@ This generated lane consumes `docs/generated/sim-index-fragment.sx`. Global inde
 
 | Feature | Subject | Specimens | Summary |
 | --- | --- | ---: | --- |
-| `feature/sim-kernel/kernel-contracts` | `crate/sim-kernel` | 0 | Define the protocol kernel for values, context, registries, shapes, capabilities, and export records. |
+| `feature/sim-kernel/kernel-contracts` | `crate/sim-kernel` | 0 | Define the protocol kernel for values, context, registries, shapes, capabilities, export records, and bare Cx or eager Cx test context helpers. |
 | `feature/sim-kernel/contract-emitter` | `crate/xtask` | 0 | Emit generated repository contract and index fragments for the kernel crate. |
 
 ## Surfaces
