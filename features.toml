@@ -10,13 +10,14 @@ frameworks = "advisory"
 [[feature]]
 id = "feature/sim-kernel/kernel-contracts"
 title = "Kernel contracts"
-summary = "Define the protocol kernel for values, context, registries, shapes, capabilities, and export records."
+summary = "Define the protocol kernel for values, context, registries, shapes, capabilities, export records, and bare Cx or eager Cx test context helpers."
 owner = "crate/sim-kernel"
 audiences = ["code"]
-guidance = "Use this row when adding a reusable kernel contract instead of hardwiring behavior in a library."
+guidance = "Use this row when adding a reusable kernel contract, reusing a plain test context, or choosing the bare Cx and eager Cx helpers instead of hardwiring behavior in a library."
 claims_anchors = [
   "anchor/crate/sim-kernel",
   "anchor/export/sim-kernel/registry/libs",
+  "anchor/rustdoc/sim-kernel/testing",
 ]
 
 [[feature]]
@@ -35,9 +36,9 @@ supports = [
 
 [[route]]
 id = "route/add-kernel-contract"
-task = "Add a kernel contract"
+task = "Add a kernel contract or reuse a plain test context"
 audiences = ["code"]
 steps = [
-  { feature = "feature/sim-kernel/kernel-contracts", why = "The kernel contract row owns the reusable protocol boundary." },
+  { feature = "feature/sim-kernel/kernel-contracts", why = "The kernel contract row owns the reusable protocol boundary plus bare Cx, eager Cx, and plain test context helpers." },
   { feature = "feature/sim-kernel/contract-emitter", why = "The emitter keeps generated contract evidence current." },
 ]
