@@ -9,8 +9,9 @@ use crate::{
     effect::Effect,
     env::Cx,
     error::{Error, Result},
-    id::{ShapeId, Symbol},
+    id::Symbol,
     ref_id::Ref,
+    shape_check::check_shape_ref,
     term::OpKey,
     value::Value,
 };
@@ -130,8 +131,9 @@ enum ResolvedOpKind<'a> {
 ///
 /// This is the kernel dispatch entry point: it resolves the key against the
 /// target (native [`Op`] or synthesized adapter), demands the required
-/// capabilities, checks the input against the declared args shape when that
-/// shape is registered, and then invokes the operation.
+/// capabilities, checks the input against the declared args shape, and then
+/// invokes the operation. Only explicit `core:Any` and `core:AnyShape` refs opt
+/// out of shape checking.
 pub fn invoke_op(cx: &mut Cx, target: Value, key: &OpKey, input: Value) -> Result<Step> {
     let resolved = resolve_op(cx, &target, key)?;
     let requires = resolved.spec().requires.clone();
@@ -165,34 +167,13 @@ pub fn resolve_op<'a>(cx: &mut Cx, target: &'a Value, key: &OpKey) -> Result<Res
     })
 }
 
-/// Checks `input` against a shape reference, passing silently when the shape is
-/// `Any` or not registered.
+/// Checks `input` against a shape reference, passing silently only when the
+/// shape reference explicitly accepts anything.
 ///
-/// Used by [`invoke_op`] to validate operation arguments; an unresolved or
-/// any-matching shape is treated as accepting all input.
+/// Used by [`invoke_op`] to validate operation arguments. Missing symbols,
+/// unresolved refs, and registered non-shape values fail closed.
 pub fn check_shape_if_available(cx: &mut Cx, shape_ref: Ref, input: Value) -> Result<()> {
-    let Ref::Symbol(symbol) = shape_ref else {
-        return Ok(());
-    };
-    if is_any_shape_symbol(&symbol) {
-        return Ok(());
-    }
-
-    let Some(shape_value) = cx.registry().shape_by_symbol(&symbol).cloned() else {
-        return Ok(());
-    };
-    let Some(shape) = shape_value.object().as_shape() else {
-        return Ok(());
-    };
-    let matched = shape.check_value(cx, input)?;
-    if matched.accepted {
-        Ok(())
-    } else {
-        Err(Error::WrongShape {
-            expected: shape.id().unwrap_or(ShapeId(0)),
-            diagnostics: matched.diagnostics,
-        })
-    }
+    check_shape_ref(cx, &shape_ref, input)
 }
 
 /// The well-known key for the core call operation (`core:call@v1`).
@@ -293,10 +274,6 @@ pub fn core_expr_snapshot_op_key() -> OpKey {
 /// The shape reference that accepts any value (`core:Any`).
 pub fn core_any_ref() -> Ref {
     core_ref("Any")
-}
-
-fn is_any_shape_symbol(symbol: &Symbol) -> bool {
-    *symbol == core_symbol("Any") || *symbol == core_symbol("AnyShape")
 }
 
 fn core_op_key(name: &str) -> OpKey {

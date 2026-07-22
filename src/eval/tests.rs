@@ -4,14 +4,17 @@ use std::sync::{
 };
 
 use crate::{
-    Demand, EagerPolicy, EvalPolicy, PreparedArgs, Result, StrictNames, Symbol, Thunk, ThunkObject,
+    Demand, EagerPolicy, EvalPolicy, MacroExpander, NoopEvalPolicy, Phase, PreparedArgs, Result,
+    StrictNames, Symbol, Thunk, ThunkObject,
     callable::Callable,
+    capability::macro_expansion_capability_for_phase,
     env::Cx,
     error::Error,
     expr::Expr,
     factory::DefaultFactory,
-    id::{CORE_EVAL_REQUEST_CLASS_ID, CORE_FUNCTION_CLASS_ID, CORE_SHAPE_CLASS_ID},
+    id::{CORE_EVAL_REQUEST_CLASS_ID, CORE_FUNCTION_CLASS_ID, CORE_SHAPE_CLASS_ID, ShapeId},
     object::{Args, Object, RawArgs},
+    shape::{MatchScore, Shape, ShapeDoc, ShapeMatch},
     value::Value,
 };
 
@@ -127,6 +130,28 @@ impl crate::ObjectCompat for FailThenSucceedCallable {
     }
 }
 
+struct FixedShape {
+    accepted: bool,
+}
+
+impl Shape for FixedShape {
+    fn check_value(&self, _cx: &mut Cx, _value: Value) -> Result<ShapeMatch> {
+        if self.accepted {
+            Ok(ShapeMatch::accept(MatchScore::exact(1)))
+        } else {
+            Ok(ShapeMatch::reject("fixed rejection"))
+        }
+    }
+
+    fn check_expr(&self, _cx: &mut Cx, _expr: &Expr) -> Result<ShapeMatch> {
+        Ok(ShapeMatch::reject("value-only shape"))
+    }
+
+    fn describe(&self, _cx: &mut Cx) -> Result<ShapeDoc> {
+        Ok(ShapeDoc::new("fixed"))
+    }
+}
+
 struct RejectUnboundNamesPolicy;
 
 impl EvalPolicy for RejectUnboundNamesPolicy {
@@ -165,12 +190,95 @@ impl EvalPolicy for RejectUnboundNamesPolicy {
     }
 }
 
+struct CountingMacroExpander {
+    calls: Arc<AtomicUsize>,
+}
+
+impl MacroExpander for CountingMacroExpander {
+    fn expand_expr(&self, _cx: &mut Cx, _phase: Phase, _expr: Expr) -> Result<Expr> {
+        self.calls.fetch_add(1, Ordering::SeqCst);
+        Ok(expanded_macro_expr())
+    }
+}
+
 fn test_cx() -> Cx {
     Cx::new(Arc::new(EagerPolicy), Arc::new(DefaultFactory))
 }
 
 fn strict_names_cx() -> Cx {
     Cx::new(Arc::new(StrictNames(EagerPolicy)), Arc::new(DefaultFactory))
+}
+
+fn registered_shape(cx: &mut Cx, name: &str, accepted: bool) -> ShapeId {
+    let shape = cx
+        .factory()
+        .opaque(Arc::new(FixedShape { accepted }))
+        .unwrap();
+    cx.registry_mut()
+        .register_shape_value(Symbol::qualified("test", name), shape)
+        .unwrap()
+}
+
+fn macro_input_expr() -> Expr {
+    Expr::Symbol(Symbol::qualified("macro-test", "input"))
+}
+
+fn expanded_macro_expr() -> Expr {
+    Expr::Symbol(Symbol::qualified("macro-test", "expanded"))
+}
+
+#[test]
+fn noop_policy_denies_macro_expansion_before_expander_runs() {
+    let calls = Arc::new(AtomicUsize::new(0));
+    let mut cx = Cx::new(Arc::new(NoopEvalPolicy), Arc::new(DefaultFactory));
+    cx.set_macro_expander(Arc::new(CountingMacroExpander {
+        calls: calls.clone(),
+    }));
+
+    let err = cx
+        .expand_macros(Phase::Expand, macro_input_expr())
+        .unwrap_err();
+
+    assert!(
+        matches!(err, Error::Eval(message) if message.contains("macro expansion denied by eval policy noop"))
+    );
+    assert_eq!(calls.load(Ordering::SeqCst), 0);
+}
+
+#[test]
+fn policy_allowed_macro_expansion_requires_phase_capability() {
+    let calls = Arc::new(AtomicUsize::new(0));
+    let mut cx = test_cx();
+    cx.set_macro_expander(Arc::new(CountingMacroExpander {
+        calls: calls.clone(),
+    }));
+
+    let err = cx
+        .expand_macros(Phase::Compile, macro_input_expr())
+        .unwrap_err();
+
+    assert!(matches!(
+        err,
+        Error::CapabilityDenied { capability }
+            if capability == macro_expansion_capability_for_phase(Phase::Compile)
+    ));
+    assert_eq!(calls.load(Ordering::SeqCst), 0);
+}
+
+#[test]
+fn macro_expansion_runs_with_policy_and_capability() {
+    let calls = Arc::new(AtomicUsize::new(0));
+    let (mut cx, seat) = Cx::new_seated(Arc::new(EagerPolicy), Arc::new(DefaultFactory));
+    seat.grant(&mut cx, macro_expansion_capability_for_phase(Phase::Eval))
+        .unwrap();
+    cx.set_macro_expander(Arc::new(CountingMacroExpander {
+        calls: calls.clone(),
+    }));
+
+    let expanded = cx.expand_macros(Phase::Eval, macro_input_expr()).unwrap();
+
+    assert_eq!(expanded, expanded_macro_expr());
+    assert_eq!(calls.load(Ordering::SeqCst), 1);
 }
 
 #[test]
@@ -226,6 +334,45 @@ fn eval_policy_can_reject_unbound_operator_call() {
         err,
         Error::UnknownFunction { function } if function == operator
     ));
+}
+
+#[test]
+fn demand_shape_accepts_matching_value() {
+    let mut cx = test_cx();
+    let shape = registered_shape(&mut cx, "accepting-shape", true);
+    let value = cx.factory().string("ok".to_owned()).unwrap();
+
+    let forced = cx.force(value.clone(), Demand::Shape(shape)).unwrap();
+
+    assert_eq!(forced, value);
+}
+
+#[test]
+fn demand_shape_rejects_mismatched_value() {
+    let mut cx = test_cx();
+    let shape = registered_shape(&mut cx, "rejecting-shape", false);
+    let value = cx.factory().string("bad".to_owned()).unwrap();
+
+    let err = cx.force(value, Demand::Shape(shape)).unwrap_err();
+
+    assert!(matches!(
+        err,
+        Error::WrongShape {
+            expected,
+            diagnostics
+        } if expected == shape && diagnostics.len() == 1
+    ));
+}
+
+#[test]
+fn demand_shape_requires_registered_shape_id() {
+    let mut cx = test_cx();
+    let missing = ShapeId(99_999);
+    let value = cx.factory().string("unchecked".to_owned()).unwrap();
+
+    let err = cx.force(value, Demand::Shape(missing)).unwrap_err();
+
+    assert!(matches!(err, Error::MissingShape(found) if found == missing));
 }
 
 #[test]

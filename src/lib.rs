@@ -8,15 +8,10 @@
 //! library crates loaded against these contracts. SIM is a Rust runtime, not a
 //! Lisp runtime; Lisp is one codec surface among several.
 //!
-//! The one deliberate exception is the pair of built-in *reference backends*:
-//! [`list::VecList`] (a [`list::ListValue`]) and [`table::AssocTable`] (a
-//! [`table::Table`]). These are the kernel's bootstrap list and table
-//! implementations -- minimal, correct, and self-annotated `sim-non-citizen` --
-//! so the runtime can stand up collections before any library loads. They are
-//! reference implementations, not the only backends: alternatives load as libs
-//! against the [`list::ListBackend`]/[`table::TableBackend`] contracts. (Future
-//! cleanup: move even these into a default-loaded distribution lib so the kernel
-//! ships pure contracts; tracked against the constellation reorg.)
+//! The built-in [`list::VecList`] and [`table::AssocTable`] backends provide
+//! bootstrap collection values before any library configures alternate backends.
+//! They implement the same [`list::ListBackend`] and [`table::TableBackend`]
+//! contracts as loadable alternatives.
 //!
 //! The kernel data flow is:
 //!
@@ -98,6 +93,7 @@ pub mod seq;
 #[cfg(test)]
 mod seq_tests;
 pub mod shape;
+mod shape_check;
 pub mod shape_report;
 pub mod standard;
 pub mod stream;
@@ -110,14 +106,11 @@ pub mod testing;
 pub mod value;
 pub use callable::Callable;
 pub use capability::{
-    CapabilityName, CapabilitySet, GrantSeat, ReadPolicy, TrustLevel, browse_internal_capability,
-    browse_read_capability, browse_run_tests_capability, config_list_impl_capability,
-    config_table_impl_capability, diminish, eval_fabric_capability, eval_remote_capability,
-    fact_private_capability, list_force_unbounded_capability, logic_consult_file_capability,
-    logic_db_write_capability, logic_tool_call_capability, macro_expand_capability,
-    macro_expand_compile_capability, macro_expand_eval_capability, macro_expand_read_capability,
-    native_dynamic_load_capability, read_construct_capability, read_eval_capability,
-    registry_catalog_read_capability, table_remote_capability,
+    CapabilityName, CapabilitySet, GrantSeat, ReadPolicy, TrustLevel, diminish,
+    eval_fabric_capability, eval_remote_capability, fact_private_capability,
+    list_force_unbounded_capability, macro_expand_capability, macro_expand_compile_capability,
+    macro_expand_eval_capability, macro_expand_read_capability, native_dynamic_load_capability,
+    read_construct_capability, read_eval_capability, registry_catalog_read_capability,
 };
 pub use claim::{Claim, ClaimKind, ClaimPattern, Visibility};
 pub use class::{Class, class_is_subclass_of};
@@ -125,7 +118,7 @@ pub use datum::{
     DATUM_CONTENT_ALGORITHM_NAME, DATUM_CONTENT_ALGORITHM_NAMESPACE, Datum, datum_content_algorithm,
 };
 pub use datum_store::{BTreeDatumStore, DatumStore};
-pub use effect::{Effect, effect_abort_op_key, effect_resume_op_key, effect_test_run_kind};
+pub use effect::{Effect, effect_abort_op_key, effect_resume_op_key};
 pub use encode::{
     CanonicalPolicy, ConstructorSurface, EncodeOptions, EncodePosition, ObjectEncode,
     ObjectEncoding, ReadConstructEncodePolicy, ReadConstructor, ReadEvalEncodePolicy, WriteCx,

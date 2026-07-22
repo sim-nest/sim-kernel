@@ -35,7 +35,7 @@ impl Registry {
                 dependents: self.symbols_for_lib_ids(&dependents),
             });
         }
-        Ok(self.unload_one(lib_id).into_iter().collect())
+        Ok(self.unload_one(lib_id)?.into_iter().collect())
     }
 
     /// Unloads a library and its dependents in reverse load order.
@@ -60,15 +60,17 @@ impl Registry {
 
         let mut unloaded = Vec::with_capacity(ordered.len());
         for id in ordered {
-            if let Some(id) = self.unload_one(id) {
+            if let Some(id) = self.unload_one(id)? {
                 unloaded.push(id);
             }
         }
         Ok(unloaded)
     }
 
-    fn unload_one(&mut self, lib_id: LibId) -> Option<LibId> {
-        let index = self.libs.iter().position(|loaded| loaded.id == lib_id)?;
+    fn unload_one(&mut self, lib_id: LibId) -> Result<Option<LibId>> {
+        let Some(index) = self.libs.iter().position(|loaded| loaded.id == lib_id) else {
+            return Ok(None);
+        };
         let loaded = self.libs.remove(index);
         let delta = self.load_deltas.remove(&lib_id).unwrap_or_default();
         self.load_dependencies.remove(&lib_id);
@@ -81,8 +83,8 @@ impl Registry {
         self.remove_number_delta(delta);
         self.rebuild_number_catalog_rows();
         self.rebuild_projection_caches_from_catalog();
-        self.recompute_sequence_rows();
-        Some(lib_id)
+        self.recompute_sequence_rows()?;
+        Ok(Some(lib_id))
     }
 
     fn loaded_lib(&self, lib_id: LibId) -> Option<&LoadedLib> {
@@ -229,7 +231,7 @@ impl Registry {
         }
     }
 
-    fn recompute_sequence_rows(&mut self) {
+    fn recompute_sequence_rows(&mut self) -> Result<()> {
         for kind in [
             SEQ_LIB,
             SEQ_CLASS,
@@ -241,8 +243,9 @@ impl Registry {
             SEQ_NUMBER_DOMAIN,
             SEQ_SITE,
         ] {
-            self.set_catalog_sequence_next(kind, self.sequence_next_after_unload(kind));
+            self.set_catalog_sequence_next(kind, self.sequence_next_after_unload(kind))?;
         }
+        Ok(())
     }
 
     fn sequence_next_after_unload(&self, kind: &'static str) -> u64 {

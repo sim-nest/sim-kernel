@@ -1,14 +1,14 @@
-use std::{
-    collections::BTreeMap,
-    sync::{
-        Arc,
-        atomic::{AtomicU64, Ordering},
-    },
+use std::sync::{
+    Arc,
+    atomic::{AtomicU64, Ordering},
 };
 
 use crate::{
     ContentId,
-    capability::{CapabilityName, CapabilitySet, GrantSeat, read_construct_capability},
+    capability::{
+        CapabilityName, CapabilitySet, GrantSeat, macro_expansion_capability_for_phase,
+        read_construct_capability,
+    },
     control::{ControlPolicy, ControlPolicyRef, NoopControlPolicy},
     datum_store::BTreeDatumStore,
     effect_ledger::EffectLedger,
@@ -27,12 +27,35 @@ use crate::{
     value::Value,
 };
 
-use super::{Diagnostics, Env};
+use super::{Diagnostics, Env, load_ledger::LibLoadLedger};
 
 /// Monotonic source of per-context grant ids. Only used to bind a [`GrantSeat`]
 /// to the context it was minted with; the value is never observable in output,
 /// so it does not affect evaluation determinism.
 static NEXT_GRANT_ID: AtomicU64 = AtomicU64::new(1);
+
+fn unknown_symbol(symbol: &Symbol) -> Error {
+    Error::UnknownSymbol {
+        symbol: symbol.clone(),
+    }
+}
+
+fn class_protocol(value: &Value) -> Result<&dyn crate::Class> {
+    value.object().as_class().ok_or(Error::TypeMismatch {
+        expected: "class",
+        found: "non-class",
+    })
+}
+
+fn read_constructor_protocol(value: &Value) -> Result<&dyn crate::ReadConstructor> {
+    value
+        .object()
+        .as_read_constructor()
+        .ok_or(Error::TypeMismatch {
+            expected: "read-constructor",
+            found: "non-read-constructor",
+        })
+}
 
 /// The capability state of a [`Cx`]; an alias for [`CapabilitySet`].
 pub type Capabilities = CapabilitySet;
@@ -65,7 +88,7 @@ pub struct Cx {
     datum_store: BTreeDatumStore,
     handles: BTreeHandleStore,
     facts: BTreeFactStore,
-    load_claims: BTreeMap<LibId, Vec<ContentId>>,
+    lib_load_ledger: LibLoadLedger,
     effect_ledger: EffectLedger,
     control_policy: ControlPolicyRef,
 }
@@ -105,7 +128,7 @@ impl Cx {
             datum_store,
             handles: BTreeHandleStore::default(),
             facts,
-            load_claims: BTreeMap::new(),
+            lib_load_ledger: LibLoadLedger::default(),
             effect_ledger: EffectLedger::default(),
             control_policy: Arc::new(NoopControlPolicy),
         }
@@ -345,23 +368,11 @@ impl Cx {
     }
 
     pub(crate) fn record_load_claims(&mut self, lib_id: LibId, claim_ids: Vec<ContentId>) {
-        if claim_ids.is_empty() {
-            return;
-        }
-        self.load_claims
-            .entry(lib_id)
-            .or_default()
-            .extend(claim_ids);
+        self.lib_load_ledger.record_claims(lib_id, claim_ids);
     }
 
     pub(crate) fn remove_load_claims(&mut self, lib_ids: &[LibId]) {
-        for lib_id in lib_ids {
-            if let Some(claim_ids) = self.load_claims.remove(lib_id) {
-                for claim_id in claim_ids {
-                    self.facts.remove(&claim_id);
-                }
-            }
-        }
+        self.lib_load_ledger.remove_claims(lib_ids, &mut self.facts);
     }
 
     /// Returns the limits bounding number-domain promotion search.
@@ -419,10 +430,18 @@ impl Cx {
 
     /// Expands macros in `expr` for the given phase, or returns it unchanged.
     pub fn expand_macros(&mut self, phase: Phase, expr: Expr) -> Result<Expr> {
-        match self.macro_expander.clone() {
-            Some(expander) => expander.expand_expr(self, phase, expr),
-            None => Ok(expr),
+        let Some(expander) = self.macro_expander.clone() else {
+            return Ok(expr);
+        };
+        let eval_policy = self.eval_policy_ref();
+        if !eval_policy.allow_macro_expansion(phase) {
+            return Err(Error::Eval(format!(
+                "macro expansion denied by eval policy {} for {phase:?}",
+                eval_policy.name()
+            )));
         }
+        self.require(&macro_expansion_capability_for_phase(phase))?;
+        expander.expand_expr(self, phase, expr)
     }
 
     /// Returns the accumulated diagnostics.
@@ -506,72 +525,70 @@ impl Cx {
 
     /// Resolves a registered class by symbol.
     pub fn resolve_class(&self, symbol: &Symbol) -> Result<Value> {
-        self.registry()
-            .class_by_symbol(symbol)
-            .cloned()
-            .ok_or_else(|| Error::UnknownClass {
+        self.resolve_registered_value(
+            |registry| registry.class_by_symbol(symbol),
+            Error::UnknownClass {
                 class: symbol.clone(),
-            })
+            },
+        )
     }
 
     /// Resolves a registered function by symbol.
     pub fn resolve_function(&self, symbol: &Symbol) -> Result<Value> {
-        self.registry()
-            .function_by_symbol(symbol)
-            .cloned()
-            .ok_or_else(|| Error::UnknownFunction {
+        self.resolve_registered_value(
+            |registry| registry.function_by_symbol(symbol),
+            Error::UnknownFunction {
                 function: symbol.clone(),
-            })
+            },
+        )
     }
 
     /// Resolves a registered macro by symbol.
     pub fn resolve_macro(&self, symbol: &Symbol) -> Result<Value> {
-        self.registry()
-            .macro_by_symbol(symbol)
-            .cloned()
-            .ok_or_else(|| Error::UnknownSymbol {
-                symbol: symbol.clone(),
-            })
+        self.resolve_registered_value(
+            |registry| registry.macro_by_symbol(symbol),
+            unknown_symbol(symbol),
+        )
     }
 
     /// Resolves a registered shape by symbol.
     pub fn resolve_shape(&self, symbol: &Symbol) -> Result<Value> {
-        self.registry()
-            .shape_by_symbol(symbol)
-            .cloned()
-            .ok_or_else(|| Error::UnknownSymbol {
-                symbol: symbol.clone(),
-            })
+        self.resolve_registered_value(
+            |registry| registry.shape_by_symbol(symbol),
+            unknown_symbol(symbol),
+        )
     }
 
     /// Resolves a registered codec by symbol.
     pub fn resolve_codec(&self, symbol: &Symbol) -> Result<Value> {
-        self.registry()
-            .codec_by_symbol(symbol)
-            .cloned()
-            .ok_or_else(|| Error::UnknownSymbol {
-                symbol: symbol.clone(),
-            })
+        self.resolve_registered_value(
+            |registry| registry.codec_by_symbol(symbol),
+            unknown_symbol(symbol),
+        )
     }
 
     /// Resolves a registered number domain by symbol.
     pub fn resolve_number_domain(&self, symbol: &Symbol) -> Result<Value> {
-        self.registry()
-            .number_domain_by_symbol(symbol)
-            .cloned()
-            .ok_or_else(|| Error::UnknownSymbol {
-                symbol: symbol.clone(),
-            })
+        self.resolve_registered_value(
+            |registry| registry.number_domain_by_symbol(symbol),
+            unknown_symbol(symbol),
+        )
     }
 
     /// Resolves a registered value binding by symbol.
     pub fn resolve_value(&self, symbol: &Symbol) -> Result<Value> {
-        self.registry()
-            .value_by_symbol(symbol)
-            .cloned()
-            .ok_or_else(|| Error::UnknownSymbol {
-                symbol: symbol.clone(),
-            })
+        self.resolve_registered_value(
+            |registry| registry.value_by_symbol(symbol),
+            unknown_symbol(symbol),
+        )
+    }
+
+    fn resolve_registered_value(
+        &self,
+        lookup: impl FnOnce(&Registry) -> Option<&Value>,
+        not_found: Error,
+    ) -> Result<Value> {
+        lookup(self.registry()).cloned().ok_or(not_found)
     }
 
     /// Calls a callable value with already-evaluated arguments.
@@ -613,27 +630,11 @@ impl Cx {
     /// Requires the [`read_construct_capability`](crate::capability::read_construct_capability).
     pub fn read_construct(&mut self, class: &Symbol, args: Vec<Value>) -> Result<Value> {
         self.require(&read_construct_capability())?;
-
         let class_value = self.resolve_class(class)?;
-        let Some(class_impl) = class_value.object().as_class() else {
-            return Err(Error::TypeMismatch {
-                expected: "class",
-                found: "non-class",
-            });
-        };
-        let Some(read_constructor) = class_impl.read_constructor(self)? else {
-            return Err(Error::Eval(format!(
-                "class {} has no read constructor",
-                class
-            )));
-        };
-        let Some(read_impl) = read_constructor.object().as_read_constructor() else {
-            return Err(Error::TypeMismatch {
-                expected: "read-constructor",
-                found: "non-read-constructor",
-            });
-        };
-        read_impl.construct_read(self, args)
+        let constructor = class_protocol(&class_value)?
+            .read_constructor(self)?
+            .ok_or_else(|| Error::Eval(format!("class {class} has no read constructor")))?;
+        read_constructor_protocol(&constructor)?.construct_read(self, args)
     }
 
     /// Forces a value to the requested demand through the active eval policy.

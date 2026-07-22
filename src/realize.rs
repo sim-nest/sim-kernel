@@ -20,6 +20,7 @@ use crate::{
     ref_id::{HandleId, Ref},
     ref_resolver::{RefResolver, ResolvedRef, TemporaryRefResolver, value_from_ref},
     seq::{Sequence, SequenceItem, sequence_item_from_event},
+    shape_check::check_shape_value,
     term::Term,
     value::Value,
 };
@@ -285,7 +286,11 @@ pub fn realize_events(
     let mut ledger = EventLedger::new();
     ledger.started(run.clone(), request_ref)?;
 
+    let result_shape = request.result_shape.clone();
     let reply = target.realize(cx, request)?;
+    if let Some(shape) = result_shape {
+        check_shape_value(cx, &shape, None, reply.value.clone())?;
+    }
     for diagnostic in &reply.diagnostics {
         ledger.push(run.clone(), EventKind::Diagnostic(diagnostic.clone()))?;
     }

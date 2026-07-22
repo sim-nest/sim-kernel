@@ -1,4 +1,4 @@
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
 
 use crate::{
@@ -14,6 +14,28 @@ use crate::library::{
     ExportKind, LibBootDependency, LibBootReceipt, LibManifest, LibSourceSpec, LoadedLib,
     RegisteredTest, Test,
 };
+
+fn symbol_for_cached_value<Id>(
+    symbols: &BTreeMap<Symbol, Id>,
+    values: &BTreeMap<Id, Value>,
+    value: &Value,
+) -> Option<Symbol>
+where
+    Id: Copy + Ord,
+{
+    symbols.iter().find_map(|(symbol, id)| {
+        values
+            .get(id)
+            .filter(|candidate| *candidate == value)
+            .map(|_| symbol.clone())
+    })
+}
+
+fn symbol_for_plain_value(values: &BTreeMap<Symbol, Value>, value: &Value) -> Option<Symbol> {
+    values
+        .iter()
+        .find_map(|(symbol, candidate)| (candidate == value).then(|| symbol.clone()))
+}
 
 impl Registry {
     /// Returns a snapshot of the registry's identity catalog.
@@ -339,60 +361,33 @@ impl Registry {
     /// Returns the export symbol a registered value is bound under, searching
     /// every export kind, if any.
     pub fn export_symbol_for_value(&self, value: &Value) -> Option<Symbol> {
-        self.class_symbol_cache
-            .iter()
-            .find_map(|(symbol, id)| {
-                self.class_value_cache
-                    .get(id)
-                    .filter(|candidate| *candidate == value)
-                    .map(|_| symbol.clone())
+        symbol_for_cached_value(&self.class_symbol_cache, &self.class_value_cache, value)
+            .or_else(|| {
+                symbol_for_cached_value(
+                    &self.function_symbol_cache,
+                    &self.function_value_cache,
+                    value,
+                )
             })
             .or_else(|| {
-                self.function_symbol_cache.iter().find_map(|(symbol, id)| {
-                    self.function_value_cache
-                        .get(id)
-                        .filter(|candidate| *candidate == value)
-                        .map(|_| symbol.clone())
-                })
+                symbol_for_cached_value(&self.macro_symbol_cache, &self.macro_value_cache, value)
             })
             .or_else(|| {
-                self.macro_symbol_cache.iter().find_map(|(symbol, id)| {
-                    self.macro_value_cache
-                        .get(id)
-                        .filter(|candidate| *candidate == value)
-                        .map(|_| symbol.clone())
-                })
+                symbol_for_cached_value(&self.shape_symbol_cache, &self.shape_value_cache, value)
             })
             .or_else(|| {
-                self.shape_symbol_cache.iter().find_map(|(symbol, id)| {
-                    self.shape_value_cache
-                        .get(id)
-                        .filter(|candidate| *candidate == value)
-                        .map(|_| symbol.clone())
-                })
+                symbol_for_cached_value(&self.codec_symbol_cache, &self.codec_value_cache, value)
             })
             .or_else(|| {
-                self.codec_symbol_cache.iter().find_map(|(symbol, id)| {
-                    self.codec_value_cache
-                        .get(id)
-                        .filter(|candidate| *candidate == value)
-                        .map(|_| symbol.clone())
-                })
+                symbol_for_cached_value(
+                    &self.number_domain_symbol_cache,
+                    &self.number_domain_value_cache,
+                    value,
+                )
             })
             .or_else(|| {
-                self.number_domain_symbol_cache
-                    .iter()
-                    .find_map(|(symbol, id)| {
-                        self.number_domain_value_cache
-                            .get(id)
-                            .filter(|candidate| *candidate == value)
-                            .map(|_| symbol.clone())
-                    })
+                symbol_for_cached_value(&self.site_symbol_cache, &self.site_value_cache, value)
             })
-            .or_else(|| {
-                self.plain_value_cache
-                    .iter()
-                    .find_map(|(symbol, candidate)| (candidate == value).then(|| symbol.clone()))
-            })
+            .or_else(|| symbol_for_plain_value(&self.plain_value_cache, value))
     }
 }

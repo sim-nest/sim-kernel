@@ -47,7 +47,7 @@ impl Registry {
                 symbol,
             });
         }
-        let id = self.fresh_class_id();
+        let id = self.try_fresh_class_id()?;
         self.register_runtime_value(symbol, value, kind, RuntimeId::Class(id))?;
         Ok(id)
     }
@@ -62,7 +62,7 @@ impl Registry {
                 symbol,
             });
         }
-        let id = self.fresh_function_id();
+        let id = self.try_fresh_function_id()?;
         self.register_runtime_value(symbol, value, kind, RuntimeId::Function(id))?;
         Ok(id)
     }
@@ -77,7 +77,7 @@ impl Registry {
                 symbol,
             });
         }
-        let id = self.fresh_macro_id();
+        let id = self.try_fresh_macro_id()?;
         self.register_runtime_value(symbol, value, kind, RuntimeId::Macro(id))?;
         Ok(id)
     }
@@ -92,7 +92,7 @@ impl Registry {
                 symbol,
             });
         }
-        let id = self.fresh_shape_id();
+        let id = self.try_fresh_shape_id()?;
         self.register_runtime_value(symbol, value, kind, RuntimeId::Shape(id))?;
         Ok(id)
     }
@@ -107,7 +107,7 @@ impl Registry {
                 symbol,
             });
         }
-        let id = self.fresh_codec_id();
+        let id = self.try_fresh_codec_id()?;
         self.register_runtime_value(symbol, value, kind, RuntimeId::Codec(id))?;
         Ok(id)
     }
@@ -126,7 +126,7 @@ impl Registry {
                 symbol,
             });
         }
-        let id = self.fresh_number_domain_id();
+        let id = self.try_fresh_number_domain_id()?;
         self.register_runtime_value(symbol, value, kind, RuntimeId::NumberDomain(id))?;
         Ok(id)
     }
@@ -141,7 +141,7 @@ impl Registry {
                 symbol,
             });
         }
-        let id = self.fresh_site_id();
+        let id = self.try_fresh_site_id()?;
         let runtime_id = RuntimeId::Site(id);
         self.register_runtime_value(symbol, value, kind, runtime_id)?;
         Ok(runtime_id)
@@ -387,13 +387,25 @@ impl Registry {
         LibId(self.reserve_catalog_sequence_id(catalog::SEQ_LIB))
     }
 
+    /// Reserves a fresh stable library id, reporting catalog sequence failures.
+    pub fn try_fresh_lib_id(&mut self) -> Result<LibId> {
+        self.try_reserve_catalog_sequence_id(catalog::SEQ_LIB)
+            .map(LibId)
+    }
+
     /// Reserves a fresh stable class id from the catalog sequence.
     pub fn fresh_class_id(&mut self) -> ClassId {
         ClassId(self.reserve_catalog_sequence_id(catalog::SEQ_CLASS))
     }
 
-    pub(crate) fn reserve_class_id(&mut self, id: ClassId) {
-        self.reserve_catalog_sequence_at_least(catalog::SEQ_CLASS, id.0);
+    /// Reserves a fresh stable class id, reporting catalog sequence failures.
+    pub fn try_fresh_class_id(&mut self) -> Result<ClassId> {
+        self.try_reserve_catalog_sequence_id(catalog::SEQ_CLASS)
+            .map(ClassId)
+    }
+
+    pub(crate) fn reserve_class_id(&mut self, id: ClassId) -> Result<()> {
+        self.try_reserve_catalog_sequence_at_least(catalog::SEQ_CLASS, id.0)
     }
 
     /// Reserves a fresh stable function id from the catalog sequence.
@@ -401,9 +413,21 @@ impl Registry {
         FunctionId(self.reserve_catalog_sequence_id(catalog::SEQ_FUNCTION))
     }
 
+    /// Reserves a fresh stable function id, reporting catalog sequence failures.
+    pub fn try_fresh_function_id(&mut self) -> Result<FunctionId> {
+        self.try_reserve_catalog_sequence_id(catalog::SEQ_FUNCTION)
+            .map(FunctionId)
+    }
+
     /// Reserves a fresh stable macro id from the catalog sequence.
     pub fn fresh_macro_id(&mut self) -> MacroId {
         MacroId(self.reserve_catalog_sequence_id(catalog::SEQ_MACRO))
+    }
+
+    /// Reserves a fresh stable macro id, reporting catalog sequence failures.
+    pub fn try_fresh_macro_id(&mut self) -> Result<MacroId> {
+        self.try_reserve_catalog_sequence_id(catalog::SEQ_MACRO)
+            .map(MacroId)
     }
 
     /// Reserves a fresh stable case id from the catalog sequence.
@@ -411,9 +435,21 @@ impl Registry {
         CaseId(self.reserve_catalog_sequence_id(catalog::SEQ_CASE))
     }
 
+    /// Reserves a fresh stable case id, reporting catalog sequence failures.
+    pub fn try_fresh_case_id(&mut self) -> Result<CaseId> {
+        self.try_reserve_catalog_sequence_id(catalog::SEQ_CASE)
+            .map(CaseId)
+    }
+
     /// Reserves a fresh stable shape id from the catalog sequence.
     pub fn fresh_shape_id(&mut self) -> ShapeId {
         ShapeId(self.reserve_catalog_sequence_id(catalog::SEQ_SHAPE))
+    }
+
+    /// Reserves a fresh stable shape id, reporting catalog sequence failures.
+    pub fn try_fresh_shape_id(&mut self) -> Result<ShapeId> {
+        self.try_reserve_catalog_sequence_id(catalog::SEQ_SHAPE)
+            .map(ShapeId)
     }
 
     /// Reserves a fresh stable codec id from the catalog sequence.
@@ -421,14 +457,33 @@ impl Registry {
         CodecId(self.reserve_catalog_sequence_id(catalog::SEQ_CODEC))
     }
 
+    /// Reserves a fresh stable codec id, reporting catalog sequence failures.
+    pub fn try_fresh_codec_id(&mut self) -> Result<CodecId> {
+        self.try_reserve_catalog_sequence_id(catalog::SEQ_CODEC)
+            .map(CodecId)
+    }
+
     /// Reserves a fresh stable number-domain id from the catalog sequence.
     pub fn fresh_number_domain_id(&mut self) -> NumberDomainId {
         NumberDomainId(self.reserve_catalog_sequence_id(catalog::SEQ_NUMBER_DOMAIN))
     }
 
+    /// Reserves a fresh stable number-domain id, reporting catalog sequence
+    /// failures.
+    pub fn try_fresh_number_domain_id(&mut self) -> Result<NumberDomainId> {
+        self.try_reserve_catalog_sequence_id(catalog::SEQ_NUMBER_DOMAIN)
+            .map(NumberDomainId)
+    }
+
     /// Reserves a fresh stable site id from the catalog sequence.
     pub fn fresh_site_id(&mut self) -> SiteId {
         SiteId(self.reserve_catalog_sequence_id(catalog::SEQ_SITE))
+    }
+
+    /// Reserves a fresh stable site id, reporting catalog sequence failures.
+    pub fn try_fresh_site_id(&mut self) -> Result<SiteId> {
+        self.try_reserve_catalog_sequence_id(catalog::SEQ_SITE)
+            .map(SiteId)
     }
 
     pub(crate) fn insert_runtime_export(

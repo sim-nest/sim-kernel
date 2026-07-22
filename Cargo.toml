@@ -1,9 +1,9 @@
 [package]
 name = "sim-kernel"
-version = "0.1.2"
+version = "0.1.4"
 edition = "2024"
 license = "MPL-2.0"
-description = "SIM workspace package for sim kernel."
+description = "Small protocol kernel contracts for the expandable SIM Rust runtime."
 readme = "README.md"
 publish = true
 repository = "https://github.com/sim-nest/sim-kernel"
@@ -27,7 +27,7 @@ unsafe_code = "forbid"
 [features]
 # Re-exposes the ambient `Cx::grant`/`grant_named` for test/fixture setup only.
 # Never enable in a production dependency: in a default build the sole capability
-# grant path is a host-held `GrantSeat` (see REVIEW_12).
+# grant path is a host-held `GrantSeat`.
 test-support = []
 
 [dependencies]

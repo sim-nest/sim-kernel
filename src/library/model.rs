@@ -65,9 +65,8 @@ impl LibTarget {
 
     /// Reconstructs a target from its serialized [`Symbol`].
     ///
-    /// The unqualified closed tags map to their variants. The legacy
-    /// `lisp-source` tag is accepted for backward compatibility and decodes to
-    /// `CodecSource(codec/lisp)` so existing serialized manifests still load.
+    /// The unqualified closed tags map to their variants. The `lisp-source`
+    /// wire tag is accepted as a closed spelling for `CodecSource(codec/lisp)`.
     /// Any other symbol is treated as an open [`LibTarget::CodecSource`].
     pub fn from_symbol(symbol: &Symbol) -> Self {
         if symbol.namespace.is_none() {
@@ -76,8 +75,7 @@ impl LibTarget {
                 "wasm-component" => return LibTarget::WasmComponent,
                 "data-only" => return LibTarget::DataOnly,
                 "host-registered" => return LibTarget::HostRegistered,
-                // Legacy tag: pre-CodecSource manifests named the lisp codec by
-                // the closed string "lisp-source".
+                // Closed tag for the loadable Lisp codec source.
                 "lisp-source" => return LibTarget::CodecSource(Symbol::qualified("codec", "lisp")),
                 _ => {}
             }
@@ -155,6 +153,17 @@ pub enum Export {
         symbol: Symbol,
         /// Reserved opaque runtime id, if known.
         runtime_id: Option<RuntimeId>,
+    },
+    /// An open export declaration with no kernel runtime-value model.
+    ///
+    /// Open declarations let manifests name export kinds that the kernel does
+    /// not resolve itself. They can commit as declared, unsupported, or invalid
+    /// export records, but they do not carry stable runtime ids.
+    Open {
+        /// Open export kind.
+        kind: ExportKind,
+        /// Symbol the export is declared under.
+        symbol: Symbol,
     },
 }
 
@@ -287,7 +296,8 @@ impl Export {
             | Self::Codec { symbol, .. }
             | Self::NumberDomain { symbol, .. }
             | Self::Value { symbol }
-            | Self::Site { symbol, .. } => symbol,
+            | Self::Site { symbol, .. }
+            | Self::Open { symbol, .. } => symbol,
         }
     }
 
@@ -302,12 +312,16 @@ impl Export {
             Self::NumberDomain { .. } => "number-domain",
             Self::Value { .. } => "value",
             Self::Site { .. } => "site",
+            Self::Open { .. } => "export",
         }
     }
 
     /// Returns this export's kind as an [`ExportKind`] tag.
     pub fn kind_symbol(&self) -> ExportKind {
-        ExportKind::named(self.kind())
+        match self {
+            Self::Open { kind, .. } => kind.clone(),
+            _ => ExportKind::named(self.kind()),
+        }
     }
 
     /// Builds a [`Declared`](ExportState::Declared) [`ExportRecord`] for this

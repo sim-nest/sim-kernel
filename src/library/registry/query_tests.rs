@@ -21,6 +21,10 @@ fn bool_value(cx: &mut Cx, value: bool) -> Value {
     cx.factory().bool(value).unwrap()
 }
 
+fn string_value(cx: &mut Cx, value: &str) -> Value {
+    cx.factory().string(value.to_owned()).unwrap()
+}
+
 fn assert_same_ref(left: Option<&Value>, right: Option<&Value>) {
     let left = left.expect("left lookup should return a value");
     let right = right.expect("right lookup should return a value");
@@ -63,6 +67,79 @@ fn load_value_lib(registry: &mut Registry, cx: &mut Cx, lib: &str, export: &str)
         .unwrap();
     registry.commit_load(txn).unwrap();
     symbol
+}
+
+#[test]
+fn export_symbol_for_value_covers_all_runtime_export_kinds() {
+    let mut cx = Cx::stub();
+    let mut registry = Registry::default();
+
+    let class_symbol = Symbol::qualified("export-symbol-query", "class");
+    let class_value = string_value(&mut cx, "class-value");
+    registry
+        .register_class_value(class_symbol.clone(), class_value.clone())
+        .unwrap();
+
+    let function_symbol = Symbol::qualified("export-symbol-query", "function");
+    let function_value = string_value(&mut cx, "function-value");
+    registry
+        .register_function_value(function_symbol.clone(), function_value.clone())
+        .unwrap();
+
+    let macro_symbol = Symbol::qualified("export-symbol-query", "macro");
+    let macro_value = string_value(&mut cx, "macro-value");
+    registry
+        .register_macro_value(macro_symbol.clone(), macro_value.clone())
+        .unwrap();
+
+    let shape_symbol = Symbol::qualified("export-symbol-query", "shape");
+    let shape_value = string_value(&mut cx, "shape-value");
+    registry
+        .register_shape_value(shape_symbol.clone(), shape_value.clone())
+        .unwrap();
+
+    let codec_symbol = Symbol::qualified("export-symbol-query", "codec");
+    let codec_value = string_value(&mut cx, "codec-value");
+    registry
+        .register_codec_value(codec_symbol.clone(), codec_value.clone())
+        .unwrap();
+
+    let number_domain_symbol = Symbol::qualified("export-symbol-query", "number-domain");
+    let number_domain_value = string_value(&mut cx, "number-domain-value");
+    registry
+        .register_number_domain_value(number_domain_symbol.clone(), number_domain_value.clone())
+        .unwrap();
+
+    let site_symbol = Symbol::qualified("export-symbol-query", "site");
+    let site_value = string_value(&mut cx, "site-value");
+    registry
+        .register_site_value(site_symbol.clone(), site_value.clone())
+        .unwrap();
+
+    let plain_value_symbol = Symbol::qualified("export-symbol-query", "plain-value");
+    let plain_value = string_value(&mut cx, "plain-value");
+    registry
+        .register_value(plain_value_symbol.clone(), plain_value.clone())
+        .unwrap();
+
+    let cases = [
+        ("class", class_value, class_symbol),
+        ("function", function_value, function_symbol),
+        ("macro", macro_value, macro_symbol),
+        ("shape", shape_value, shape_symbol),
+        ("codec", codec_value, codec_symbol),
+        ("number-domain", number_domain_value, number_domain_symbol),
+        ("site", site_value, site_symbol),
+        ("plain value", plain_value, plain_value_symbol),
+    ];
+
+    for (label, value, expected_symbol) in cases {
+        assert_eq!(
+            registry.export_symbol_for_value(&value),
+            Some(expected_symbol),
+            "{label} export lookup should return its symbol"
+        );
+    }
 }
 
 #[test]
@@ -289,6 +366,10 @@ fn export_site_value_registered_through_linker_is_queryable_by_symbol_and_id() {
     assert!(matches!(site_id, RuntimeId::Site(_)));
     assert_eq!(registry.site_value(site_id), Some(&site_value));
     assert_eq!(registry.site_by_symbol(&site_symbol), Some(&site_value));
+    assert_eq!(
+        registry.export_symbol_for_value(&site_value),
+        Some(site_symbol.clone())
+    );
     assert_eq!(
         registry
             .export_symbols()

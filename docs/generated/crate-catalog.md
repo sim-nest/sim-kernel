@@ -6,5 +6,5 @@ Generated from Cargo metadata by `xtask crate-catalog v1`.
 
 | Package | Publish | Targets | Description |
 | --- | --- | --- | --- |
-| `sim-kernel` | `true` | `lib` | SIM workspace package for sim kernel. |
-| `xtask` | `false` | `bin` | SIM workspace package for xtask. |
+| `sim-kernel` | `true` | `lib` | Small protocol kernel contracts for the expandable SIM Rust runtime. |
+| `xtask` | `false` | `bin` | Repository-local validation commands for sim-kernel. |

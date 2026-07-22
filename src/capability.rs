@@ -1,13 +1,14 @@
 //! Capability names and sets: the contract for gating privileged operations.
 //!
-//! The kernel defines capability identity, trust levels, and read policy plus
-//! the well-known core capability names; libraries decide what each capability
-//! authorizes.
+//! The kernel defines capability identity, trust levels, read policy, and
+//! cross-cutting kernel capability names. Libraries mint behavior-specific
+//! capability names with [`CapabilityName::new`] in their own crates.
 
 use std::{collections::BTreeSet, fmt, sync::Arc};
 
 use crate::{
     error::{Error, Result},
+    eval::Phase,
     id::Symbol,
 };
 
@@ -96,17 +97,17 @@ impl GrantSeat {
     /// from granting itself a capability.
     ///
     /// [`Cx::new_seated`]: crate::Cx::new_seated
-    pub fn grant(&self, cx: &mut crate::Cx, capability: CapabilityName) {
-        assert!(
-            self.cx_id == 0 || self.cx_id == cx.grant_id(),
-            "a GrantSeat may only grant into the Cx it was minted with"
-        );
+    pub fn grant(&self, cx: &mut crate::Cx, capability: CapabilityName) -> Result<()> {
+        if self.cx_id != 0 && self.cx_id != cx.grant_id() {
+            return Err(Error::ForeignGrantSeat);
+        }
         cx.grant_from_host(capability);
+        Ok(())
     }
 
     /// Grants a capability named by a static string into `cx`.
-    pub fn grant_named(&self, cx: &mut crate::Cx, capability: &'static str) {
-        self.grant(cx, CapabilityName::new(capability));
+    pub fn grant_named(&self, cx: &mut crate::Cx, capability: &'static str) -> Result<()> {
+        self.grant(cx, CapabilityName::new(capability))
     }
 }
 
@@ -248,6 +249,16 @@ pub fn macro_expand_capability() -> CapabilityName {
     CapabilityName::new("macro.expand")
 }
 
+/// The phase-specific capability required to run macro expansion.
+pub fn macro_expansion_capability_for_phase(phase: Phase) -> CapabilityName {
+    match phase {
+        Phase::Read => macro_expand_read_capability(),
+        Phase::Expand => macro_expand_capability(),
+        Phase::Compile => macro_expand_compile_capability(),
+        Phase::Eval => macro_expand_eval_capability(),
+    }
+}
+
 /// The capability gating compile-phase macro expansion (`macro.expand.compile`).
 pub fn macro_expand_compile_capability() -> CapabilityName {
     CapabilityName::new("macro.expand.compile")
@@ -298,104 +309,9 @@ pub fn fact_private_capability() -> CapabilityName {
     CapabilityName::new("kernel.fact.private")
 }
 
-/// The capability gating browse reads (`browse.read`).
-pub fn browse_read_capability() -> CapabilityName {
-    CapabilityName::new("browse.read")
-}
-
-/// The capability gating browse-driven test runs (`browse.run-tests`).
-pub fn browse_run_tests_capability() -> CapabilityName {
-    CapabilityName::new("browse.run-tests")
-}
-
-/// The capability gating internal browse surfaces (`browse.internal`).
-pub fn browse_internal_capability() -> CapabilityName {
-    CapabilityName::new("browse.internal")
-}
-
-/// The capability gating logic-database writes (`logic.db.write`).
-pub fn logic_db_write_capability() -> CapabilityName {
-    CapabilityName::new("logic.db.write")
-}
-
-/// The capability gating logic file consulting (`logic.consult.file`).
-pub fn logic_consult_file_capability() -> CapabilityName {
-    CapabilityName::new("logic.consult.file")
-}
-
-/// The capability gating logic tool calls (`logic.tool-call`).
-pub fn logic_tool_call_capability() -> CapabilityName {
-    CapabilityName::new("logic.tool-call")
-}
-
-/// The capability gating the configured list implementation (`config.list.impl`).
-pub fn config_list_impl_capability() -> CapabilityName {
-    CapabilityName::new("config.list.impl")
-}
-
-/// The capability gating the configured table implementation (`config.table.impl`).
-pub fn config_table_impl_capability() -> CapabilityName {
-    CapabilityName::new("config.table.impl")
-}
-
 /// The capability gating unbounded list forcing (`list.force.unbounded`).
 pub fn list_force_unbounded_capability() -> CapabilityName {
     CapabilityName::new("list.force.unbounded")
-}
-
-/// The capability gating filesystem-backed tables (`table.fs`).
-pub fn table_fs_capability() -> CapabilityName {
-    CapabilityName::new("table.fs")
-}
-
-/// The capability gating filesystem table reads (`table.fs.read`).
-pub fn table_fs_read_capability() -> CapabilityName {
-    CapabilityName::new("table.fs.read")
-}
-
-/// The capability gating filesystem table writes (`table.fs.write`).
-pub fn table_fs_write_capability() -> CapabilityName {
-    CapabilityName::new("table.fs.write")
-}
-
-/// The capability gating filesystem table directory creation (`table.fs.mkdir`).
-pub fn table_fs_mkdir_capability() -> CapabilityName {
-    CapabilityName::new("table.fs.mkdir")
-}
-
-/// The capability gating filesystem table directory removal (`table.fs.rmdir`).
-pub fn table_fs_rmdir_capability() -> CapabilityName {
-    CapabilityName::new("table.fs.rmdir")
-}
-
-/// The capability gating database-backed tables (`table.db`).
-pub fn table_db_capability() -> CapabilityName {
-    CapabilityName::new("table.db")
-}
-
-/// The capability gating database table reads (`table.db.read`).
-pub fn table_db_read_capability() -> CapabilityName {
-    CapabilityName::new("table.db.read")
-}
-
-/// The capability gating database table writes (`table.db.write`).
-pub fn table_db_write_capability() -> CapabilityName {
-    CapabilityName::new("table.db.write")
-}
-
-/// The capability gating database table directory creation (`table.db.mkdir`).
-pub fn table_db_mkdir_capability() -> CapabilityName {
-    CapabilityName::new("table.db.mkdir")
-}
-
-/// The capability gating database table directory removal (`table.db.rmdir`).
-pub fn table_db_rmdir_capability() -> CapabilityName {
-    CapabilityName::new("table.db.rmdir")
-}
-
-/// The capability gating remote tables (`table.remote`).
-pub fn table_remote_capability() -> CapabilityName {
-    CapabilityName::new("table.remote")
 }
 
 /// The capability gating registry catalog reads (`registry.catalog.read`).
@@ -451,7 +367,7 @@ mod tests {
 
     #[test]
     fn diminish_is_subset_of_current_and_allowed_for_small_sets() {
-        let universe = ["read-construct", "read-eval", "eval.fabric", "table.remote"];
+        let universe = ["read-construct", "read-eval", "eval.fabric", "eval.remote"];
         for current_mask in 0..(1 << universe.len()) {
             for allowed_mask in 0..(1 << universe.len()) {
                 let current = mask_set(&universe, current_mask);
@@ -517,12 +433,11 @@ mod tests {
         let (mut cx, seat) = Cx::new_seated(Arc::new(NoopEvalPolicy), Arc::new(DefaultFactory));
         // A freshly seated context grants nothing until the host uses the seat.
         assert!(cx.require(&cap).is_err());
-        seat.grant(&mut cx, cap.clone());
+        seat.grant(&mut cx, cap.clone()).unwrap();
         assert!(cx.require(&cap).is_ok());
     }
 
     #[test]
-    #[should_panic(expected = "minted with")]
     fn a_seat_cannot_grant_into_a_foreign_cx() {
         use std::sync::Arc;
 
@@ -535,7 +450,10 @@ mod tests {
             Cx::new_seated(Arc::new(NoopEvalPolicy), Arc::new(DefaultFactory));
         let (_throwaway, forged) =
             Cx::new_seated(Arc::new(NoopEvalPolicy), Arc::new(DefaultFactory));
-        forged.grant(&mut victim, read_eval_capability()); // panics: foreign Cx
+        assert!(matches!(
+            forged.grant(&mut victim, read_eval_capability()),
+            Err(Error::ForeignGrantSeat)
+        ));
     }
 
     #[cfg(feature = "test-support")]

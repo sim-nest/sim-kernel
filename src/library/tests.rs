@@ -1,6 +1,6 @@
 use crate::library::{
-    AbiVersion, Dependency, Export, ExportKind, ExportState, LibManifest, LibTarget, Registry,
-    Version,
+    AbiVersion, Dependency, Export, ExportKind, ExportState, LibManifest, LibSourceSpec, LibTarget,
+    LoaderRegistry, Registry, Version,
 };
 use crate::{
     CORE_NIL_CLASS_ID, CaseId, ClassId, CodecId, Cx, Error, FunctionId, LibId, MacroId,
@@ -109,6 +109,28 @@ fn export_site_round_trips_symbol_and_kind() {
     assert_eq!(export.symbol(), &symbol);
     assert_eq!(export.kind(), "site");
     assert_eq!(export.kind_symbol(), ExportKind::named(ExportKind::SITE));
+}
+
+#[test]
+fn open_lib_source_without_claiming_loader_fails_at_load_time() {
+    let registry = LoaderRegistry::new();
+    let mut cx = Cx::stub();
+
+    let err = registry
+        .load_and_register_with_receipt(
+            &mut cx,
+            LibSourceSpec::Open {
+                kind: Symbol::qualified("loader", "unknown"),
+                payload: crate::Datum::String("opaque".to_owned()),
+            },
+        )
+        .unwrap_err();
+
+    assert!(matches!(
+        err,
+        Error::HostError(message)
+            if message == "no loader accepted lib source kind loader/unknown"
+    ));
 }
 
 // guards the registry catalog contract
@@ -364,8 +386,8 @@ fn commit_rejects_undeclared_export_records() {
     txn.linker()
         .unsupported_export(
             ExportKind::named(ExportKind::CODEC),
-            Symbol::new("future-codec"),
-            "not implemented",
+            Symbol::new("unsupported-codec"),
+            "unsupported by this target",
         )
         .unwrap();
 
@@ -374,7 +396,7 @@ fn commit_rejects_undeclared_export_records() {
         err,
         Error::UndeclaredExportRecord { kind, symbol }
             if kind == ExportKind::named(ExportKind::CODEC)
-                && symbol == Symbol::new("future-codec")
+                && symbol == Symbol::new("unsupported-codec")
     ));
 }
 
@@ -384,7 +406,7 @@ fn commit_keeps_declared_unsupported_export_records() {
     let mut txn = registry.begin_load(
         LibManifest {
             exports: vec![Export::Codec {
-                symbol: Symbol::new("future-codec"),
+                symbol: Symbol::new("unsupported-codec"),
                 codec_id: None,
             }],
             ..manifest("declared-lib", "0.1.0")
@@ -394,8 +416,8 @@ fn commit_keeps_declared_unsupported_export_records() {
     txn.linker()
         .unsupported_export(
             ExportKind::named(ExportKind::CODEC),
-            Symbol::new("future-codec"),
-            "not implemented",
+            Symbol::new("unsupported-codec"),
+            "unsupported by this target",
         )
         .unwrap();
 
@@ -403,9 +425,68 @@ fn commit_keeps_declared_unsupported_export_records() {
     let loaded = registry.lib(&Symbol::new("declared-lib")).unwrap();
     assert!(loaded.exports.iter().any(|record| {
         record.kind == ExportKind::named(ExportKind::CODEC)
-            && record.symbol == Symbol::new("future-codec")
+            && record.symbol == Symbol::new("unsupported-codec")
             && matches!(record.state, ExportState::Unsupported { .. })
     }));
+}
+
+#[test]
+fn commit_keeps_declared_open_export_records() {
+    let mut registry = Registry::default();
+    let kind = ExportKind::new(Symbol::qualified("surface", "projection"));
+    let declared = Symbol::new("declared-surface");
+    let unsupported = Symbol::new("unsupported-surface");
+    let invalid = Symbol::new("invalid-surface");
+    let mut txn = registry.begin_load(
+        LibManifest {
+            exports: vec![
+                Export::Open {
+                    kind: kind.clone(),
+                    symbol: declared.clone(),
+                },
+                Export::Open {
+                    kind: kind.clone(),
+                    symbol: unsupported.clone(),
+                },
+                Export::Open {
+                    kind: kind.clone(),
+                    symbol: invalid.clone(),
+                },
+            ],
+            ..manifest("open-export-lib", "0.1.0")
+        },
+        true,
+    );
+    {
+        let mut linker = txn.linker();
+        linker
+            .declare_export(kind.clone(), declared.clone())
+            .unwrap();
+        linker
+            .unsupported_export(kind.clone(), unsupported.clone(), "not available")
+            .unwrap();
+        linker
+            .invalid_export(kind.clone(), invalid.clone(), "bad declaration")
+            .unwrap();
+    }
+
+    registry.commit_load(txn).unwrap();
+    let loaded = registry.lib(&Symbol::new("open-export-lib")).unwrap();
+
+    assert!(loaded.exports.iter().any(|record| {
+        record.kind == kind && record.symbol == declared && record.state == ExportState::Declared
+    }));
+    assert!(loaded.exports.iter().any(|record| {
+        record.kind == kind
+            && record.symbol == unsupported
+            && matches!(record.state, ExportState::Unsupported { .. })
+    }));
+    assert!(loaded.exports.iter().any(|record| {
+        record.kind == kind
+            && record.symbol == invalid
+            && matches!(record.state, ExportState::Invalid { .. })
+    }));
+    assert!(!registry.export_symbols().contains_key(&kind));
 }
 
 // guards the registry catalog contract

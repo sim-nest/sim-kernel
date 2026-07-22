@@ -101,6 +101,32 @@ fn sha256_matches_known_digest() {
     );
 }
 
+#[test]
+fn sha256_matches_empty_input_digest() {
+    assert_eq!(
+        to_hex(&sha256(b"")),
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    );
+}
+
+#[test]
+fn sha256_matches_one_block_boundary_digest() {
+    assert_eq!(
+        to_hex(&sha256(&[b'a'; 55])),
+        "9f4390f8d30c2dd92ec9f095b65e2b9ae9b0a925a5258e241c9f1e910f734318"
+    );
+}
+
+#[test]
+fn sha256_matches_multi_block_digest() {
+    assert_eq!(
+        to_hex(&sha256(
+            b"abcdbcdecdefdefgefghfghighijhijkijkljklmklmnlmnomnopnopq"
+        )),
+        "248d6a61d20638b8e5c026930c3e6039a33ce45964ff2167f6ecedd419db06c1"
+    );
+}
+
 fn to_hex(bytes: &[u8]) -> String {
     let mut out = String::new();
     for byte in bytes {

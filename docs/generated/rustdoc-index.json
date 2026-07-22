@@ -1,5 +1,19 @@
 {
-  "schema": "sim.rustdoc-index.v1",
-  "repo": "sim-kernel",
-  "target_doc": "target/doc/"
+  "generator": "xtask repo-contract v1",
+  "packages": [
+    {
+      "crate_name": "sim_kernel",
+      "group": "workspace",
+      "manifest": "Cargo.toml",
+      "package": "sim-kernel",
+      "summary": "sim-kernel is the small protocol kernel of the SIM Rust runtime."
+    },
+    {
+      "crate_name": "xtask",
+      "group": "workspace",
+      "manifest": "xtask/Cargo.toml",
+      "package": "xtask",
+      "summary": "Repository-local validation commands for sim-kernel."
+    }
+  ]
 }

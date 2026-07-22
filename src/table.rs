@@ -90,10 +90,8 @@ pub trait Dir: Table {
 
 /// Baseline table backend backed by an association list under a lock.
 // sim-non-citizen(reason = "kernel table backing object; canonical form is native table entries", kind = "private", descriptor = "")
-// FUTURE CLEANUP: this is the kernel's built-in REFERENCE table backend (the
-// bootstrap implementation). Once a default-loaded distribution lib can supply
-// a `TableBackend` before any user code runs, move `AssocTable` out of the
-// kernel and keep only the `Table`/`TableBackend` contracts here.
+// AssocTable is the built-in bootstrap table backend. It implements the same
+// Table/TableBackend contracts as loadable table backends.
 pub struct AssocTable {
     entries: RwLock<Vec<(Symbol, Value)>>,
 }

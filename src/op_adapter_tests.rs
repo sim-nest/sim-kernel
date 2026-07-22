@@ -1,13 +1,15 @@
 use std::sync::Arc;
 
 use crate::{
-    ClassRef, Cx, Dir, Env, EvalFabric, EvalReply, EvalRequest, Expr, NumberDomain, NumberLiteral,
-    NumberValue, Object, ObjectEncode, ObjectEncoding, ReadConstructor, Result, Sequence,
-    SequenceItem, ShapeRef, Step, Stream, Symbol, Table, Value, core_class_symbol_op_key,
+    AbiVersion, ClassRef, Cx, Dir, Env, EvalFabric, EvalReply, EvalRequest, Export, Expr, Lib,
+    LibManifest, LibTarget, Linker, LoadCx, NumberDomain, NumberLiteral, NumberValue, Object,
+    ObjectEncode, ObjectEncoding, ReadConstructor, Ref, Result, Sequence, SequenceItem, ShapeRef,
+    Step, Stream, Symbol, Table, Value, Version, card::card_for_ref, core_class_symbol_op_key,
     core_dir_is_dir_op_key, core_expr_snapshot_op_key, core_force_op_key, core_list_items_op_key,
     core_number_domain_symbol_op_key, core_number_value_op_key, core_object_encoding_op_key,
-    core_read_construct_op_key, core_realize_start_op_key, core_seq_next_op_key,
-    core_table_entries_op_key, invoke_op, read_construct_capability, resolve_op,
+    core_read_construct_op_key, core_realize_start_op_key, core_seq_close_op_key,
+    core_seq_next_op_key, core_table_entries_op_key, invoke_op, read_construct_capability,
+    resolve_op,
 };
 
 fn qsym(namespace: &str, name: &str) -> Symbol {
@@ -237,6 +239,52 @@ impl Stream for EmptyStream {
     }
 }
 
+#[derive(Clone, Copy)]
+enum AdapterClaimKind {
+    Fabric,
+    Sequence,
+}
+
+struct AdapterClaimLib {
+    lib_symbol: Symbol,
+    export_symbol: Symbol,
+    kind: AdapterClaimKind,
+}
+
+impl AdapterClaimLib {
+    fn new(lib: &str, export: &str, kind: AdapterClaimKind) -> Self {
+        Self {
+            lib_symbol: qsym("test", lib),
+            export_symbol: qsym("test", export),
+            kind,
+        }
+    }
+}
+
+impl Lib for AdapterClaimLib {
+    fn manifest(&self) -> LibManifest {
+        LibManifest {
+            id: self.lib_symbol.clone(),
+            version: Version(env!("CARGO_PKG_VERSION").to_owned()),
+            abi: AbiVersion { major: 0, minor: 1 },
+            target: LibTarget::HostRegistered,
+            requires: Vec::new(),
+            capabilities: Vec::new(),
+            exports: vec![Export::Value {
+                symbol: self.export_symbol.clone(),
+            }],
+        }
+    }
+
+    fn load(&self, cx: &mut LoadCx, linker: &mut Linker) -> Result<()> {
+        let value = match self.kind {
+            AdapterClaimKind::Fabric => cx.factory().opaque(Arc::new(UnitFabric))?,
+            AdapterClaimKind::Sequence => cx.factory().opaque(Arc::new(EmptySequence))?,
+        };
+        linker.value(self.export_symbol.clone(), value)
+    }
+}
+
 struct TestDir;
 
 impl Object for TestDir {
@@ -319,7 +367,7 @@ impl Dir for TestDir {
 }
 
 #[test]
-fn k6_17_adapters_resolve_for_newly_deprecated_accessor_families() {
+fn adapters_resolve_for_protocol_backed_accessor_families() {
     let mut cx = Cx::stub();
     let cases = vec![
         (
@@ -367,7 +415,51 @@ fn k6_17_adapters_resolve_for_newly_deprecated_accessor_families() {
 }
 
 #[test]
-fn k6_17_adapters_invoke_legacy_protocols_without_new_object_methods() {
+fn adapter_backed_loaded_values_publish_ops_claimed_by_resolve_op() {
+    let mut cx = Cx::stub();
+    let cases = [
+        (
+            AdapterClaimLib::new(
+                "adapter-claim-fabric-lib",
+                "adapter-claim-fabric",
+                AdapterClaimKind::Fabric,
+            ),
+            vec![core_realize_start_op_key()],
+        ),
+        (
+            AdapterClaimLib::new(
+                "adapter-claim-sequence-lib",
+                "adapter-claim-sequence",
+                AdapterClaimKind::Sequence,
+            ),
+            vec![core_seq_next_op_key(), core_seq_close_op_key()],
+        ),
+    ];
+
+    for (lib, expected_keys) in cases {
+        let export_symbol = lib.export_symbol.clone();
+        cx.load_lib(&lib).unwrap();
+        let value = cx
+            .registry()
+            .value_by_symbol(&export_symbol)
+            .cloned()
+            .expect("loaded adapter value should be registered");
+        let published_ops = card_ops_for_symbol(&mut cx, export_symbol.clone());
+
+        for key in expected_keys {
+            let resolved = resolve_op(&mut cx, &value, &key).expect("adapter op should resolve");
+            let op_text = operation_key_text(&resolved.spec().key);
+            assert_eq!(resolved.spec().key, key);
+            assert!(
+                published_ops.contains(&op_text),
+                "expected {export_symbol} card ops to contain {op_text:?}, got {published_ops:?}"
+            );
+        }
+    }
+}
+
+#[test]
+fn adapters_invoke_protocol_methods_without_object_overrides() {
     let mut cx = Cx::stub();
     cx.grant_from_host(read_construct_capability());
 
@@ -495,4 +587,32 @@ fn map_value(cx: &mut Cx, value: &Value, key: &str) -> Option<Expr> {
             Expr::Symbol(symbol) if symbol == Symbol::new(key) => Some(value),
             _ => None,
         })
+}
+
+fn card_ops_for_symbol(cx: &mut Cx, symbol: Symbol) -> Vec<String> {
+    let card = card_for_ref(cx, Ref::Symbol(symbol.clone())).unwrap();
+    let Expr::Map(entries) = card.object().as_expr(cx).unwrap() else {
+        panic!("expected card map for {symbol}");
+    };
+    let ops = entries
+        .into_iter()
+        .find_map(|(key, value)| match key {
+            Expr::Symbol(key) if key == Symbol::new("ops") => Some(value),
+            _ => None,
+        })
+        .unwrap_or_else(|| panic!("expected ops field for {symbol}"));
+    let Expr::List(items) = ops else {
+        panic!("expected ops list for {symbol}");
+    };
+    items
+        .into_iter()
+        .map(|item| match item {
+            Expr::String(text) => text,
+            other => panic!("expected string op claim for {symbol}, got {other:?}"),
+        })
+        .collect()
+}
+
+fn operation_key_text(key: &crate::OpKey) -> String {
+    format!("{}/{}.v{}", key.namespace, key.name, key.version)
 }

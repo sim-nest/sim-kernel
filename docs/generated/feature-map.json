@@ -1,5 +1,21 @@
 {
-  "schema": "sim.feature-map.v1",
-  "repo": "sim-kernel",
-  "packages": []
+  "generator": "xtask repo-contract v1",
+  "packages": [
+    {
+      "features": [
+        {
+          "edges": [],
+          "name": "test-support",
+          "workspace_edges": []
+        }
+      ],
+      "group": "workspace",
+      "package": "sim-kernel"
+    },
+    {
+      "features": [],
+      "group": "workspace",
+      "package": "xtask"
+    }
+  ]
 }

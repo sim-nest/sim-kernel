@@ -324,32 +324,48 @@ impl Registry {
         }
     }
 
-    pub(crate) fn reserve_catalog_sequence_id(&mut self, kind: &'static str) -> u32 {
+    pub(crate) fn try_reserve_catalog_sequence_id(&mut self, kind: &'static str) -> Result<u32> {
         let kind = Symbol::new(kind);
         let reserved = sequence_next(&self.catalog, &kind)
-            .expect("registry catalog sequence row should exist");
+            .ok_or_else(|| sequence_error(&kind, "missing or malformed sequence row"))?;
         let next = reserved
             .checked_add(1)
-            .expect("registry catalog sequence overflow");
-        write_sequence_next(&mut self.catalog, kind, next);
-        u32::try_from(reserved).expect("registry catalog sequence exceeded u32 ID range")
+            .ok_or_else(|| sequence_error(&kind, "sequence overflow"))?;
+        let id = u32::try_from(reserved)
+            .map_err(|_| sequence_error(&kind, "sequence exceeded u32 id range"))?;
+        write_sequence_next(&mut self.catalog, kind, next)?;
+        Ok(id)
     }
 
-    pub(crate) fn reserve_catalog_sequence_at_least(&mut self, kind: &'static str, id: u32) {
+    pub(crate) fn reserve_catalog_sequence_id(&mut self, kind: &'static str) -> u32 {
+        self.try_reserve_catalog_sequence_id(kind)
+            .unwrap_or_else(|err| panic!("{err}"))
+    }
+
+    pub(crate) fn try_reserve_catalog_sequence_at_least(
+        &mut self,
+        kind: &'static str,
+        id: u32,
+    ) -> Result<()> {
         let kind = Symbol::new(kind);
         let current = sequence_next(&self.catalog, &kind)
-            .expect("registry catalog sequence row should exist");
+            .ok_or_else(|| sequence_error(&kind, "missing or malformed sequence row"))?;
         let required = u64::from(id)
             .checked_add(1)
-            .expect("registry catalog sequence overflow");
+            .ok_or_else(|| sequence_error(&kind, "sequence overflow"))?;
         let next = current.max(required);
         if next != current {
-            write_sequence_next(&mut self.catalog, kind, next);
+            write_sequence_next(&mut self.catalog, kind, next)?;
         }
+        Ok(())
     }
 
-    pub(crate) fn set_catalog_sequence_next(&mut self, kind: &'static str, next: u64) {
-        write_sequence_next(&mut self.catalog, Symbol::new(kind), next);
+    pub(crate) fn set_catalog_sequence_next(
+        &mut self,
+        kind: &'static str,
+        next: u64,
+    ) -> Result<()> {
+        write_sequence_next(&mut self.catalog, Symbol::new(kind), next)
     }
 }
 
@@ -493,12 +509,18 @@ fn sequence_next(catalog: &CatalogStore, kind: &Symbol) -> Option<u64> {
     canonical.parse().ok()
 }
 
-fn write_sequence_next(catalog: &mut CatalogStore, kind: Symbol, next: u64) {
+fn sequence_error(kind: &Symbol, message: &'static str) -> Error {
+    Error::CatalogSchema {
+        table: sequences_table(),
+        message: format!("{message} for {kind}"),
+    }
+}
+
+fn write_sequence_next(catalog: &mut CatalogStore, kind: Symbol, next: u64) -> Result<()> {
     let mut tx = CatalogTx::new();
     tx.put_row(sequence_row(kind.clone(), next));
     tx.bump_sequence(schema::sequence_key(&kind), next);
-    tx.commit(catalog)
-        .expect("registry catalog sequence update should validate");
+    tx.commit(catalog).map(|_| ())
 }
 
 #[cfg(test)]

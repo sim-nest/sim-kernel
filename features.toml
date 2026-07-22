@@ -1,0 +1,43 @@
+schema = "sim.features"
+
+[enforcement.audience]
+code = "strict"
+
+[enforcement.route]
+major_entrypoints = "advisory"
+frameworks = "advisory"
+
+[[feature]]
+id = "feature/sim-kernel/kernel-contracts"
+title = "Kernel contracts"
+summary = "Define the protocol kernel for values, context, registries, shapes, capabilities, and export records."
+owner = "crate/sim-kernel"
+audiences = ["code"]
+guidance = "Use this row when adding a reusable kernel contract instead of hardwiring behavior in a library."
+claims_anchors = [
+  "anchor/crate/sim-kernel",
+  "anchor/export/sim-kernel/registry/libs",
+]
+
+[[feature]]
+id = "feature/sim-kernel/contract-emitter"
+title = "Kernel contract emitter"
+summary = "Emit generated repository contract and index fragments for the kernel crate."
+owner = "crate/xtask"
+audiences = ["code"]
+guidance = "Use this row when refreshing kernel generated docs or index fragments."
+claims_anchors = [
+  "anchor/crate/xtask",
+]
+supports = [
+  "feature/sim-kernel/kernel-contracts",
+]
+
+[[route]]
+id = "route/add-kernel-contract"
+task = "Add a kernel contract"
+audiences = ["code"]
+steps = [
+  { feature = "feature/sim-kernel/kernel-contracts", why = "The kernel contract row owns the reusable protocol boundary." },
+  { feature = "feature/sim-kernel/contract-emitter", why = "The emitter keeps generated contract evidence current." },
+]

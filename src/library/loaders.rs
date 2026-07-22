@@ -1,8 +1,8 @@
 use std::cmp::Ordering;
-use std::path::PathBuf;
 use std::sync::Arc;
 
 use crate::{
+    Datum,
     capability::{CapabilityName, CapabilitySet},
     env::Cx,
     error::{Error, Result},
@@ -56,9 +56,19 @@ impl LoadCx {
         self.registry.fresh_class_id()
     }
 
+    /// Reserves a fresh stable class id, reporting catalog sequence failures.
+    pub fn try_fresh_class_id(&mut self) -> Result<ClassId> {
+        self.registry.try_fresh_class_id()
+    }
+
     /// Reserves a fresh stable function id.
     pub fn fresh_function_id(&mut self) -> FunctionId {
         self.registry.fresh_function_id()
+    }
+
+    /// Reserves a fresh stable function id, reporting catalog sequence failures.
+    pub fn try_fresh_function_id(&mut self) -> Result<FunctionId> {
+        self.registry.try_fresh_function_id()
     }
 
     /// Reserves a fresh stable macro id.
@@ -66,9 +76,19 @@ impl LoadCx {
         self.registry.fresh_macro_id()
     }
 
+    /// Reserves a fresh stable macro id, reporting catalog sequence failures.
+    pub fn try_fresh_macro_id(&mut self) -> Result<MacroId> {
+        self.registry.try_fresh_macro_id()
+    }
+
     /// Reserves a fresh stable case id.
     pub fn fresh_case_id(&mut self) -> CaseId {
         self.registry.fresh_case_id()
+    }
+
+    /// Reserves a fresh stable case id, reporting catalog sequence failures.
+    pub fn try_fresh_case_id(&mut self) -> Result<CaseId> {
+        self.registry.try_fresh_case_id()
     }
 
     /// Reserves a fresh stable shape id.
@@ -76,14 +96,30 @@ impl LoadCx {
         self.registry.fresh_shape_id()
     }
 
+    /// Reserves a fresh stable shape id, reporting catalog sequence failures.
+    pub fn try_fresh_shape_id(&mut self) -> Result<ShapeId> {
+        self.registry.try_fresh_shape_id()
+    }
+
     /// Reserves a fresh stable codec id.
     pub fn fresh_codec_id(&mut self) -> CodecId {
         self.registry.fresh_codec_id()
     }
 
+    /// Reserves a fresh stable codec id, reporting catalog sequence failures.
+    pub fn try_fresh_codec_id(&mut self) -> Result<CodecId> {
+        self.registry.try_fresh_codec_id()
+    }
+
     /// Reserves a fresh stable number-domain id.
     pub fn fresh_number_domain_id(&mut self) -> NumberDomainId {
         self.registry.fresh_number_domain_id()
+    }
+
+    /// Reserves a fresh stable number-domain id, reporting catalog sequence
+    /// failures.
+    pub fn try_fresh_number_domain_id(&mut self) -> Result<NumberDomainId> {
+        self.registry.try_fresh_number_domain_id()
     }
 
     /// Checks that the given capability is granted, returning
@@ -236,14 +272,22 @@ pub trait Lib {
 pub enum LibSource {
     /// A catalog-resolved library symbol.
     Symbol(Symbol),
-    /// A filesystem path.
-    Path(PathBuf),
-    /// A URL.
-    Url(String),
-    /// In-memory bytes (e.g. an ABI frame).
-    Bytes(Vec<u8>),
+    /// A loader-defined source carried as data.
+    Open {
+        /// Loader-defined source kind.
+        kind: Symbol,
+        /// Opaque payload interpreted by the loader that claims `kind`.
+        payload: Datum,
+    },
     /// A host-constructed library object.
     Host(Box<dyn Lib>),
+}
+
+impl LibSource {
+    /// Builds a loader-defined source carried as opaque data.
+    pub fn open(kind: Symbol, payload: Datum) -> Self {
+        Self::Open { kind, payload }
+    }
 }
 
 /// A catalog-registered source for a library symbol.
@@ -253,20 +297,26 @@ pub enum LibSource {
 /// on use.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum CatalogSource {
-    /// A filesystem path.
-    Path(PathBuf),
-    /// A URL.
-    Url(String),
-    /// In-memory bytes.
-    Bytes(Vec<u8>),
+    /// A loader-defined source carried as data.
+    Open {
+        /// Loader-defined source kind.
+        kind: Symbol,
+        /// Opaque payload interpreted by the loader that claims `kind`.
+        payload: Datum,
+    },
+}
+
+impl CatalogSource {
+    /// Builds a loader-defined catalog source carried as opaque data.
+    pub fn open(kind: Symbol, payload: Datum) -> Self {
+        Self::Open { kind, payload }
+    }
 }
 
 impl From<CatalogSource> for LibSource {
     fn from(source: CatalogSource) -> Self {
         match source {
-            CatalogSource::Path(path) => Self::Path(path),
-            CatalogSource::Url(url) => Self::Url(url),
-            CatalogSource::Bytes(bytes) => Self::Bytes(bytes),
+            CatalogSource::Open { kind, payload } => Self::Open { kind, payload },
         }
     }
 }
@@ -340,6 +390,10 @@ impl LoaderRegistry {
             LibSource::Symbol(symbol) => Err(Error::HostError(format!(
                 "no loader accepted lib source symbol {}",
                 symbol
+            ))),
+            LibSource::Open { kind, .. } => Err(Error::HostError(format!(
+                "no loader accepted lib source kind {}",
+                kind
             ))),
             _ => Err(Error::HostError("no loader accepted lib source".to_owned())),
         }
@@ -434,6 +488,10 @@ impl LoaderRegistry {
             LibSource::Symbol(symbol) => Err(Error::HostError(format!(
                 "no loader accepted lib source symbol {}",
                 symbol
+            ))),
+            LibSource::Open { kind, .. } => Err(Error::HostError(format!(
+                "no loader accepted lib source kind {} for inspection",
+                kind
             ))),
             _ => Err(Error::HostError(
                 "no loader accepted lib source for inspection".to_owned(),

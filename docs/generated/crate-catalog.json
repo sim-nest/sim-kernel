@@ -3,7 +3,7 @@
   "package_count": 2,
   "packages": [
     {
-      "description": "SIM workspace package for sim kernel.",
+      "description": "Small protocol kernel contracts for the expandable SIM Rust runtime.",
       "generated_readme": false,
       "manifest": "Cargo.toml",
       "name": "sim-kernel",
@@ -15,7 +15,7 @@
       ]
     },
     {
-      "description": "SIM workspace package for xtask.",
+      "description": "Repository-local validation commands for sim-kernel.",
       "generated_readme": true,
       "manifest": "xtask/Cargo.toml",
       "name": "xtask",

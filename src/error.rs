@@ -106,6 +106,12 @@ pub enum Error {
         /// The unresolved class name.
         class: Symbol,
     },
+    /// A class exists but does not provide a callable constructor.
+    #[error("class {class} is not constructible")]
+    NonConstructibleClass {
+        /// The class that was called as a constructor.
+        class: Symbol,
+    },
     /// A function name could not be resolved.
     #[error("unknown function {function}")]
     UnknownFunction {
@@ -115,6 +121,15 @@ pub enum Error {
     /// No class is registered under the given id.
     #[error("missing class with id {0:?}")]
     MissingClass(ClassId),
+    /// No shape is registered under the given id.
+    #[error("missing shape with id {0:?}")]
+    MissingShape(ShapeId),
+    /// A shape reference could not be resolved.
+    #[error("unresolved shape ref {reference:?}")]
+    UnresolvedShapeRef {
+        /// The unresolved shape reference.
+        reference: Box<crate::Ref>,
+    },
     /// A value's class did not match the expected class.
     #[error("wrong class: expected {expected:?}, found {found:?}")]
     WrongClass {
@@ -194,6 +209,10 @@ pub enum Error {
         /// The caller's trust level.
         trust: TrustLevel,
     },
+    /// A host grant seat was used with a different context than the one it was
+    /// minted for.
+    #[error("grant seat cannot grant into a foreign Cx")]
+    ForeignGrantSeat,
     /// A codec failed to read or write a form.
     #[error("codec error in {codec:?}: {message}")]
     CodecError {

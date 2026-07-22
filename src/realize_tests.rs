@@ -1,7 +1,9 @@
+use std::sync::Arc;
+
 use crate::{
-    CapabilityName, Consistency, Cx, Diagnostic, EvalFabric, EvalMode, EvalReply, EvalRequest,
-    EventKind, EventSource, Expr, ObserveMode, RealizeRequest, Result, Value, realize_events,
-    realize_final,
+    CapabilityName, Consistency, Cx, Diagnostic, Error, EvalFabric, EvalMode, EvalReply,
+    EvalRequest, EventKind, EventSource, Expr, MatchScore, ObserveMode, RealizeRequest, Result,
+    Shape, ShapeDoc, ShapeMatch, Value, realize_events, realize_final,
 };
 
 #[derive(Clone)]
@@ -12,6 +14,28 @@ struct StaticFabric {
 impl EvalFabric for StaticFabric {
     fn realize(&self, _cx: &mut Cx, _request: EvalRequest) -> Result<EvalReply> {
         Ok(self.reply.clone())
+    }
+}
+
+struct FixedShape {
+    accepted: bool,
+}
+
+impl Shape for FixedShape {
+    fn check_value(&self, _cx: &mut Cx, _value: Value) -> Result<ShapeMatch> {
+        if self.accepted {
+            Ok(ShapeMatch::accept(MatchScore::exact(1)))
+        } else {
+            Ok(ShapeMatch::reject("realize result rejected"))
+        }
+    }
+
+    fn check_expr(&self, _cx: &mut Cx, _expr: &Expr) -> Result<ShapeMatch> {
+        Ok(ShapeMatch::reject("value-only shape"))
+    }
+
+    fn describe(&self, _cx: &mut Cx) -> Result<ShapeDoc> {
+        Ok(ShapeDoc::new("fixed"))
     }
 }
 
@@ -36,6 +60,12 @@ fn reply(value: Value) -> EvalReply {
         diagnostics: Vec::new(),
         trace: None,
     }
+}
+
+fn shape_value(cx: &mut Cx, accepted: bool) -> Value {
+    cx.factory()
+        .opaque(Arc::new(FixedShape { accepted }))
+        .unwrap()
 }
 
 #[test]
@@ -74,6 +104,36 @@ fn eventful_realize_drains_back_to_eval_reply() {
     assert_eq!(drained.value, value);
     assert!(drained.diagnostics.is_empty());
     assert!(drained.trace.is_none());
+}
+
+#[test]
+fn eventful_realize_accepts_matching_result_shape() {
+    let mut cx = Cx::stub();
+    let value = cx.factory().string("final".to_owned()).unwrap();
+    let mut request = request(Expr::Nil);
+    request.result_shape = Some(shape_value(&mut cx, true));
+    let fabric = StaticFabric {
+        reply: reply(value.clone()),
+    };
+
+    let drained = realize_final(&mut cx, &fabric, request).unwrap();
+
+    assert_eq!(drained.value, value);
+}
+
+#[test]
+fn eventful_realize_rejects_mismatched_result_shape() {
+    let mut cx = Cx::stub();
+    let value = cx.factory().string("final".to_owned()).unwrap();
+    let mut request = request(Expr::Nil);
+    request.result_shape = Some(shape_value(&mut cx, false));
+    let fabric = StaticFabric {
+        reply: reply(value),
+    };
+
+    let err = realize_events(&mut cx, &fabric, request).unwrap_err();
+
+    assert!(matches!(err, Error::WrongShape { .. }));
 }
 
 #[test]
