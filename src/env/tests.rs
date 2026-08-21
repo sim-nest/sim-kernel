@@ -94,6 +94,7 @@ fn promotion_search_respects_state_limit() {
     let mut cx = Cx::new(
         Arc::new(crate::eval::NoopEvalPolicy),
         Arc::new(DefaultFactory),
+        crate::HandleSeed::new(7),
     );
     let middle = Symbol::qualified("numbers", "middle-test");
     let target = Symbol::qualified("numbers", "target-test");
@@ -465,8 +466,11 @@ fn number_reduction_dispatch_applies_only_the_winning_rule_once() {
 fn fork_from_seed_reproduces_capabilities_and_copied_content() {
     use crate::{CapabilityName, DefaultFactory, NoopEvalPolicy, capability::GrantSeat};
 
-    let (mut seed, seat): (Cx, GrantSeat) =
-        Cx::new_seated(Arc::new(NoopEvalPolicy), Arc::new(DefaultFactory));
+    let (mut seed, seat): (Cx, GrantSeat) = Cx::new_seated(
+        Arc::new(NoopEvalPolicy),
+        Arc::new(DefaultFactory),
+        crate::HandleSeed::new(7),
+    );
 
     // A capability granted through the seed's host seat.
     let cap = CapabilityName::new("fork-test-cap");
@@ -479,7 +483,7 @@ fn fork_from_seed_reproduces_capabilities_and_copied_content() {
     let domain = Symbol::qualified("numbers", "fork-domain-test");
     register_test_domain(&mut seed, "fork-domain-test");
 
-    let fork = seed.fork_from_seed();
+    let fork = seed.fork_from_seed(crate::HandleSeed::new(8));
 
     // The fork carries the same granted capabilities as its seed.
     assert!(fork.require(&cap).is_ok());

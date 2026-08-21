@@ -95,19 +95,15 @@ pub struct Cx {
 
 impl Cx {
     /// Builds a fresh context with the given eval policy and factory.
-    ///
     /// The registry, capability set, and stores start empty (boot claims aside);
     /// libraries register behavior into the returned context.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// # use std::sync::Arc;
-    /// # use sim_kernel::{Cx, DefaultFactory, NoopEvalPolicy};
-    /// let cx = Cx::new(Arc::new(NoopEvalPolicy), Arc::new(DefaultFactory));
-    /// assert!(cx.capabilities().iter().next().is_none());
-    /// ```
-    pub fn new(eval_policy: EvalPolicyRef, factory: Arc<dyn Factory>) -> Self {
+    /// `handle_seed` is supplied by the runtime boundary and namespaces every
+    /// live handle allocated by this context.
+    pub fn new(
+        eval_policy: EvalPolicyRef,
+        factory: Arc<dyn Factory>,
+        handle_seed: crate::HandleSeed,
+    ) -> Self {
         let mut datum_store = BTreeDatumStore::default();
         let mut facts = BTreeFactStore::default();
         facts.insert_boot_claims(&mut datum_store);
@@ -126,12 +122,17 @@ impl Cx {
             promotion_search_limits: PromotionSearchLimits::default(),
             sources: SourceRegistry::default(),
             datum_store,
-            handles: BTreeHandleStore::default(),
+            handles: BTreeHandleStore::new(handle_seed),
             facts,
             lib_load_ledger: LibLoadLedger::default(),
             effect_ledger: EffectLedger::default(),
             control_policy: Arc::new(NoopControlPolicy),
         }
+    }
+
+    /// Allocates a handle from this context's caller-seeded sequence.
+    pub fn fresh_handle(&mut self) -> crate::HandleId {
+        self.handles.fresh_handle()
     }
 
     /// Returns the active lexical environment.
@@ -470,8 +471,12 @@ impl Cx {
     /// grants capabilities through it. The seat is never handed to a callable, so
     /// loaded behavior cannot grant itself a capability. Use this instead of
     /// [`Cx::new`] wherever the host needs to grant capabilities.
-    pub fn new_seated(eval_policy: EvalPolicyRef, factory: Arc<dyn Factory>) -> (Self, GrantSeat) {
-        let cx = Self::new(eval_policy, factory);
+    pub fn new_seated(
+        eval_policy: EvalPolicyRef,
+        factory: Arc<dyn Factory>,
+        handle_seed: crate::HandleSeed,
+    ) -> (Self, GrantSeat) {
+        let cx = Self::new(eval_policy, factory, handle_seed);
         let seat = GrantSeat::for_cx(cx.grant_id);
         (cx, seat)
     }

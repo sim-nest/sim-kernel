@@ -13,12 +13,20 @@ use crate::{Cx, DefaultFactory, EagerPolicy, NoopEvalPolicy};
 ///
 /// Use for tests that exercise structure without driving evaluation.
 pub fn bare_cx() -> Cx {
-    Cx::new(Arc::new(NoopEvalPolicy), Arc::new(DefaultFactory))
+    Cx::new(
+        Arc::new(NoopEvalPolicy),
+        Arc::new(DefaultFactory),
+        crate::HandleSeed::new(0x5445_5354),
+    )
 }
 
 /// An eager evaluation context: the eager eval policy over the default factory.
 ///
 /// Use for tests that evaluate forms to completion.
 pub fn eager_cx() -> Cx {
-    Cx::new(Arc::new(EagerPolicy), Arc::new(DefaultFactory))
+    Cx::new(
+        Arc::new(EagerPolicy),
+        Arc::new(DefaultFactory),
+        crate::HandleSeed::new(0x5445_5354),
+    )
 }

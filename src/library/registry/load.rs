@@ -122,7 +122,11 @@ impl Registry {
     /// };
     /// use sim_kernel::{Cx, DefaultFactory, NoopEvalPolicy, Symbol};
     ///
-    /// let mut cx = Cx::new(Arc::new(NoopEvalPolicy), Arc::new(DefaultFactory));
+    /// let mut cx = Cx::new(
+    ///     Arc::new(NoopEvalPolicy),
+    ///     Arc::new(DefaultFactory),
+    ///     sim_kernel::HandleSeed::new(7),
+    /// );
     /// let answer = cx.factory().bool(true).unwrap();
     ///
     /// let manifest = LibManifest {

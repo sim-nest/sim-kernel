@@ -4,9 +4,9 @@ use std::sync::{
 };
 
 use crate::{
-    Args, Callable, CapabilityName, ClassRef, Cx, Datum, Error, Expr, HandleId, MatchScore, Object,
-    Op, OpKey, OpSpec, Ref, Result, Shape, ShapeDoc, ShapeMatch, Step, Symbol, Value, core_any_ref,
-    core_call_op_key, core_shape_check_value_op_key, datum_store::DatumStore,
+    Args, Callable, CapabilityName, ClassRef, Cx, Datum, Error, Expr, HandleId, HandleSeed,
+    MatchScore, Object, Op, OpKey, OpSpec, Ref, Result, Shape, ShapeDoc, ShapeMatch, Step, Symbol,
+    Value, core_any_ref, core_call_op_key, core_shape_check_value_op_key, datum_store::DatumStore,
     handle_store::HandleStore, invoke_op,
 };
 
@@ -308,7 +308,7 @@ fn unresolved_args_shape_ref_fails_closed() {
     let mut cx = Cx::stub();
     let calls = Arc::new(AtomicUsize::new(0));
     let key = OpKey::new(Symbol::new("test"), Symbol::new("count"), 1);
-    let missing = Ref::Handle(HandleId::fresh());
+    let missing = Ref::Handle(HandleId::from_seed_and_sequence(HandleSeed::new(7), 99));
     let target = cx
         .factory()
         .opaque(Arc::new(OpObject {

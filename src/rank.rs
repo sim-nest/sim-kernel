@@ -67,7 +67,11 @@ pub fn rank_ordinal_predicate() -> Symbol {
 /// # use sim_kernel::id::Symbol;
 /// # use sim_kernel::rank::rank_coordinate;
 /// # use sim_kernel::ref_id::Ref;
-/// let mut cx = Cx::new(Arc::new(NoopEvalPolicy), Arc::new(DefaultFactory));
+/// let mut cx = Cx::new(
+///     Arc::new(NoopEvalPolicy),
+///     Arc::new(DefaultFactory),
+///     sim_kernel::HandleSeed::new(7),
+/// );
 /// let ordinal = cx
 ///     .datum_store_mut()
 ///     .intern(Datum::String("first".to_owned()))
@@ -172,7 +176,11 @@ mod tests {
 
     #[test]
     fn rank_space_and_coordinate_claims_are_publishable_without_accessor() {
-        let mut cx = Cx::new(Arc::new(NoopEvalPolicy), Arc::new(DefaultFactory));
+        let mut cx = Cx::new(
+            Arc::new(NoopEvalPolicy),
+            Arc::new(DefaultFactory),
+            crate::HandleSeed::new(7),
+        );
         let space = Symbol::qualified("rank", "expr-small");
         publish_rank_space_claims(&mut cx, space.clone(), Some("small expression rank")).unwrap();
 
@@ -202,7 +210,11 @@ mod tests {
 
     #[test]
     fn rank_space_and_coordinate_claims_project_to_cards() {
-        let mut cx = Cx::new(Arc::new(NoopEvalPolicy), Arc::new(DefaultFactory));
+        let mut cx = Cx::new(
+            Arc::new(NoopEvalPolicy),
+            Arc::new(DefaultFactory),
+            crate::HandleSeed::new(7),
+        );
         let space = Symbol::qualified("rank", "expr-small");
         publish_rank_space_claims(&mut cx, space.clone(), Some("small expression rank")).unwrap();
 

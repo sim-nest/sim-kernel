@@ -12,7 +12,7 @@ homepage = "https://github.com/sim-nest/sim-kernel"
 [workspace]
 resolver = "3"
 members = [
-  "xtask",
+  "crates/xtask",
 ]
 
 [workspace.package]

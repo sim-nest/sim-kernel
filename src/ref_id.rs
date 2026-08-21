@@ -4,14 +4,6 @@
 //! coordinates -- that name data and objects across the substrate; libraries
 //! resolve refs to values.
 
-use std::{
-    sync::{
-        OnceLock,
-        atomic::{AtomicU64, Ordering},
-    },
-    time::{SystemTime, UNIX_EPOCH},
-};
-
 use crate::id::Symbol;
 
 /// A stable reference to data or an object across the substrate.
@@ -52,11 +44,52 @@ impl ContentId {
 pub struct HandleId(pub u128);
 
 impl HandleId {
-    /// Allocates a fresh handle, distinct from every other in this process.
-    pub fn fresh() -> Self {
-        let salt = u128::from(*PROCESS_SALT.get_or_init(make_process_salt));
-        let counter = u128::from(NEXT_HANDLE.fetch_add(1, Ordering::Relaxed));
-        Self((salt << 64) | counter)
+    /// Builds a handle from a supplied seed and sequence number.
+    pub const fn from_seed_and_sequence(seed: HandleSeed, sequence: u64) -> Self {
+        Self(((seed.0 as u128) << 64) | sequence as u128)
+    }
+}
+
+/// Caller-supplied namespace for a deterministic sequence of live handles.
+///
+/// A runtime boundary obtains this plain value from its bootstrap input. The
+/// kernel never manufactures one from ambient process state.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct HandleSeed(pub u64);
+
+impl HandleSeed {
+    /// Creates a handle seed from caller-owned data.
+    pub const fn new(value: u64) -> Self {
+        Self(value)
+    }
+
+    /// Starts a deterministic handle sequence in this seed's namespace.
+    pub const fn sequence(self) -> HandleSequence {
+        HandleSequence {
+            seed: self,
+            next: 1,
+        }
+    }
+}
+
+/// Deterministic allocator for handles in one caller-supplied namespace.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct HandleSequence {
+    seed: HandleSeed,
+    next: u64,
+}
+
+impl HandleSequence {
+    /// Allocates the next handle in the sequence.
+    ///
+    /// # Panics
+    ///
+    /// Panics after exhausting all nonzero `u64` sequence numbers instead of
+    /// wrapping into an existing handle.
+    pub fn next_handle(&mut self) -> HandleId {
+        let sequence = self.next;
+        self.next = self.next.checked_add(1).expect("handle sequence exhausted");
+        HandleId::from_seed_and_sequence(self.seed, sequence)
     }
 }
 
@@ -67,18 +100,6 @@ pub struct Coordinate {
     pub space: Symbol,
     /// The position within the space, keyed by content id.
     pub ordinal: ContentId,
-}
-
-static NEXT_HANDLE: AtomicU64 = AtomicU64::new(1);
-static PROCESS_SALT: OnceLock<u64> = OnceLock::new();
-
-fn make_process_salt() -> u64 {
-    let nanos = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map_or(0, |duration| duration.as_nanos());
-    let folded = (nanos ^ (nanos >> 64)) & u128::from(u64::MAX);
-    let time_salt = u64::try_from(folded).unwrap_or(0);
-    time_salt ^ (u64::from(std::process::id()) << 32)
 }
 
 #[cfg(test)]
@@ -121,14 +142,27 @@ mod tests {
 
     #[test]
     fn ref_id_handle_never_equals_content_id() {
-        let handle = Ref::Handle(HandleId::fresh());
+        let handle = Ref::Handle(HandleSeed::new(7).sequence().next_handle());
         let content = Ref::Content(content_id(3));
 
         assert_ne!(handle, content);
     }
 
     #[test]
-    fn ref_id_fresh_handles_are_distinct() {
-        assert_ne!(HandleId::fresh(), HandleId::fresh());
+    fn equal_seeds_produce_identical_handle_sequences() {
+        let mut left = HandleSeed::new(7).sequence();
+        let mut right = HandleSeed::new(7).sequence();
+
+        assert_eq!(left.next_handle(), right.next_handle());
+        assert_eq!(left.next_handle(), right.next_handle());
+    }
+
+    #[test]
+    fn distinct_seeds_separate_handle_sequences() {
+        let mut left = HandleSeed::new(7).sequence();
+        let mut right = HandleSeed::new(8).sequence();
+
+        assert_ne!(left.next_handle(), right.next_handle());
+        assert_ne!(left.next_handle(), right.next_handle());
     }
 }

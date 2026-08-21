@@ -17,7 +17,7 @@ use crate::{
     handle_store::HandleStore,
     id::{CORE_SEQUENCE_CLASS_ID, Symbol},
     object::{ClassRef, Object, ShapeRef},
-    ref_id::{HandleId, Ref},
+    ref_id::Ref,
     ref_resolver::{RefResolver, ResolvedRef, TemporaryRefResolver, value_from_ref},
     seq::{Sequence, SequenceItem, sequence_item_from_event},
     shape_check::check_shape_value,
@@ -282,7 +282,7 @@ pub fn realize_events(
 ) -> Result<BufferedEventSource> {
     let eventful_request = RealizeRequest::from_eval_request(cx, &request)?;
     let request_ref = ref_for_realize_request(cx, &eventful_request)?;
-    let run = Ref::Handle(HandleId::fresh());
+    let run = Ref::Handle(cx.fresh_handle());
     let mut ledger = EventLedger::new();
     ledger.started(run.clone(), request_ref)?;
 

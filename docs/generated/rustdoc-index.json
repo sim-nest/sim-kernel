@@ -11,7 +11,7 @@
     {
       "crate_name": "xtask",
       "group": "workspace",
-      "manifest": "xtask/Cargo.toml",
+      "manifest": "crates/xtask/Cargo.toml",
       "package": "xtask",
       "summary": "Repository-local validation commands for sim-kernel."
     }

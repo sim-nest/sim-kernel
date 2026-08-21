@@ -70,10 +70,10 @@
       "description": "Repository-local validation commands for sim-kernel.",
       "features": [],
       "group": "workspace",
-      "manifest": "xtask/Cargo.toml",
+      "manifest": "crates/xtask/Cargo.toml",
       "name": "xtask",
       "publish": "false",
-      "root": "xtask",
+      "root": "crates/xtask",
       "rustdoc_summary": "Repository-local validation commands for sim-kernel.",
       "target_kinds": [
         "bin"
@@ -87,7 +87,7 @@
             "bin"
           ],
           "name": "xtask",
-          "src": "xtask/src/main.rs"
+          "src": "crates/xtask/src/main.rs"
         }
       ]
     }
@@ -97,10 +97,10 @@
     "generated_by": "cargo run -p xtask -- simdoc",
     "generation_timestamp": "2026-07-14T23:28:48+02:00",
     "generator": "xtask repo-contract v1",
-    "git_commit": "5e718799d9a03fbcbd20c92cf7a6a02480ec6388",
+    "git_commit": "9cbeca6a6109028eea562b9b0ad0de51e95cf739",
     "repo": "sim-kernel",
     "schema": "sim.provenance.v1",
-    "source_commit": "5e718799d9a03fbcbd20c92cf7a6a02480ec6388",
+    "source_commit": "9cbeca6a6109028eea562b9b0ad0de51e95cf739",
     "source_remote": "https://github.com/sim-nest/sim-kernel",
     "validation_commands": [
       "cargo fmt --all --check",
@@ -113,11 +113,15 @@
       "cargo run -p xtask -- validation-matrix --check --repo .",
       "cargo run -p xtask -- crate-catalog --check --repo ."
     ],
-    "workspace_hash": "859f160c33d654e9",
+    "workspace_hash": "a1c9e9cbcf2e066b",
     "workspace_hash_algorithm": "fnv1a64",
-    "workspace_hash_input_count": 129,
+    "workspace_hash_input_count": 132,
     "workspace_hash_inputs": [
       "Cargo.toml",
+      "crates/xtask/Cargo.toml",
+      "crates/xtask/src/file_sizes.rs",
+      "crates/xtask/src/main.rs",
+      "crates/xtask/src/simdoc.rs",
       "features.toml",
       "src/callable.rs",
       "src/capability.rs",
@@ -244,8 +248,7 @@
       "src/term.rs",
       "src/term_tests.rs",
       "src/testing.rs",
-      "src/value.rs",
-      "xtask/Cargo.toml"
+      "src/value.rs"
     ]
   },
   "recipe_book_count": 0,

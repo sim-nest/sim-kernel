@@ -22,8 +22,9 @@ impl Cx {
     /// state, and a fork begins with the fresh empty stores of [`Cx::new`].
     ///
     /// [`GrantSeat`]: crate::GrantSeat
-    pub fn fork_from_seed(&self) -> Cx {
-        let (mut fork, seat) = Cx::new_seated(self.eval_policy_ref(), self.factory_ref());
+    pub fn fork_from_seed(&self, handle_seed: crate::HandleSeed) -> Cx {
+        let (mut fork, seat) =
+            Cx::new_seated(self.eval_policy_ref(), self.factory_ref(), handle_seed);
         *fork.env_mut() = self.env().clone();
         *fork.registry_mut() = self.registry().clone();
         *fork.sources_mut() = self.sources().clone();

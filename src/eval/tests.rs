@@ -202,11 +202,19 @@ impl MacroExpander for CountingMacroExpander {
 }
 
 fn test_cx() -> Cx {
-    Cx::new(Arc::new(EagerPolicy), Arc::new(DefaultFactory))
+    Cx::new(
+        Arc::new(EagerPolicy),
+        Arc::new(DefaultFactory),
+        crate::HandleSeed::new(7),
+    )
 }
 
 fn strict_names_cx() -> Cx {
-    Cx::new(Arc::new(StrictNames(EagerPolicy)), Arc::new(DefaultFactory))
+    Cx::new(
+        Arc::new(StrictNames(EagerPolicy)),
+        Arc::new(DefaultFactory),
+        crate::HandleSeed::new(7),
+    )
 }
 
 fn registered_shape(cx: &mut Cx, name: &str, accepted: bool) -> ShapeId {
@@ -230,7 +238,11 @@ fn expanded_macro_expr() -> Expr {
 #[test]
 fn noop_policy_denies_macro_expansion_before_expander_runs() {
     let calls = Arc::new(AtomicUsize::new(0));
-    let mut cx = Cx::new(Arc::new(NoopEvalPolicy), Arc::new(DefaultFactory));
+    let mut cx = Cx::new(
+        Arc::new(NoopEvalPolicy),
+        Arc::new(DefaultFactory),
+        crate::HandleSeed::new(7),
+    );
     cx.set_macro_expander(Arc::new(CountingMacroExpander {
         calls: calls.clone(),
     }));
@@ -268,7 +280,11 @@ fn policy_allowed_macro_expansion_requires_phase_capability() {
 #[test]
 fn macro_expansion_runs_with_policy_and_capability() {
     let calls = Arc::new(AtomicUsize::new(0));
-    let (mut cx, seat) = Cx::new_seated(Arc::new(EagerPolicy), Arc::new(DefaultFactory));
+    let (mut cx, seat) = Cx::new_seated(
+        Arc::new(EagerPolicy),
+        Arc::new(DefaultFactory),
+        crate::HandleSeed::new(7),
+    );
     seat.grant(&mut cx, macro_expansion_capability_for_phase(Phase::Eval))
         .unwrap();
     cx.set_macro_expander(Arc::new(CountingMacroExpander {
@@ -296,7 +312,11 @@ fn default_policy_self_quotes_unbound_value_symbol() {
 
 #[test]
 fn eval_policy_can_reject_unbound_value_symbol() {
-    let mut cx = Cx::new(Arc::new(RejectUnboundNamesPolicy), Arc::new(DefaultFactory));
+    let mut cx = Cx::new(
+        Arc::new(RejectUnboundNamesPolicy),
+        Arc::new(DefaultFactory),
+        crate::HandleSeed::new(7),
+    );
     let symbol = Symbol::qualified("test", "free");
 
     let err = cx.eval_expr(Expr::Symbol(symbol.clone())).unwrap_err();
@@ -321,7 +341,11 @@ fn default_policy_turns_unbound_operator_call_into_symbolic_call() {
 
 #[test]
 fn eval_policy_can_reject_unbound_operator_call() {
-    let mut cx = Cx::new(Arc::new(RejectUnboundNamesPolicy), Arc::new(DefaultFactory));
+    let mut cx = Cx::new(
+        Arc::new(RejectUnboundNamesPolicy),
+        Arc::new(DefaultFactory),
+        crate::HandleSeed::new(7),
+    );
     let operator = Symbol::qualified("test", "free-call");
     let expr = Expr::Call {
         operator: Box::new(Expr::Symbol(operator.clone())),

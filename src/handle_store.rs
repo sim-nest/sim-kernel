@@ -5,7 +5,10 @@
 
 use std::collections::{BTreeMap, HashMap};
 
-use crate::{ref_id::HandleId, value::Value};
+use crate::{
+    ref_id::{HandleId, HandleSeed, HandleSequence},
+    value::Value,
+};
 
 /// Contract for interning runtime [`Value`]s behind opaque [`HandleId`]s.
 ///
@@ -25,16 +28,21 @@ pub trait HandleStore {
 
 /// In-memory [`HandleStore`] keyed by [`HandleId`] with a reverse value index;
 /// the kernel default.
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug)]
 pub struct BTreeHandleStore {
+    sequence: HandleSequence,
     values: BTreeMap<HandleId, Value>,
     handles_by_value: HashMap<Value, HandleId>,
 }
 
 impl BTreeHandleStore {
     /// Creates an empty store.
-    pub fn new() -> Self {
-        Self::default()
+    pub fn new(seed: HandleSeed) -> Self {
+        Self {
+            sequence: seed.sequence(),
+            values: BTreeMap::new(),
+            handles_by_value: HashMap::new(),
+        }
     }
 
     /// Returns the number of interned values.
@@ -46,6 +54,11 @@ impl BTreeHandleStore {
     pub fn is_empty(&self) -> bool {
         self.values.is_empty()
     }
+
+    /// Allocates an identity without interning a value.
+    pub fn fresh_handle(&mut self) -> HandleId {
+        self.sequence.next_handle()
+    }
 }
 
 impl HandleStore for BTreeHandleStore {
@@ -54,7 +67,7 @@ impl HandleStore for BTreeHandleStore {
             return *handle;
         }
 
-        let handle = HandleId::fresh();
+        let handle = self.fresh_handle();
         self.handles_by_value.insert(value.clone(), handle);
         self.values.insert(handle, value);
         handle
@@ -85,7 +98,7 @@ mod tests {
 
     #[test]
     fn handle_store_intern_followed_by_get_returns_original_value() {
-        let mut store = BTreeHandleStore::new();
+        let mut store = BTreeHandleStore::new(HandleSeed::new(7));
         let value = factory().string("stored".to_owned()).unwrap();
 
         let handle = store.intern(value.clone());
@@ -96,7 +109,7 @@ mod tests {
 
     #[test]
     fn handle_store_reuses_handle_for_same_value() {
-        let mut store = BTreeHandleStore::new();
+        let mut store = BTreeHandleStore::new(HandleSeed::new(7));
         let value = factory().bool(true).unwrap();
 
         let first = store.intern(value.clone());
@@ -108,7 +121,7 @@ mod tests {
 
     #[test]
     fn handle_store_distinguishes_distinct_values() {
-        let mut store = BTreeHandleStore::new();
+        let mut store = BTreeHandleStore::new(HandleSeed::new(7));
         let first_value = factory().bool(true).unwrap();
         let second_value = factory().bool(true).unwrap();
 
@@ -121,7 +134,7 @@ mod tests {
 
     #[test]
     fn handle_store_reuses_handle_for_cloned_value() {
-        let mut store = BTreeHandleStore::new();
+        let mut store = BTreeHandleStore::new(HandleSeed::new(7));
         let left = factory().string("same".to_owned()).unwrap();
         let right = left.clone();
 

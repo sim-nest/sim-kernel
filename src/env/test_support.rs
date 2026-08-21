@@ -13,7 +13,11 @@ impl Cx {
     pub fn stub() -> Self {
         use crate::{eval::NoopEvalPolicy, factory::DefaultFactory};
 
-        Self::new(Arc::new(NoopEvalPolicy), Arc::new(DefaultFactory))
+        Self::new(
+            Arc::new(NoopEvalPolicy),
+            Arc::new(DefaultFactory),
+            crate::HandleSeed::new(0x5445_5354),
+        )
     }
 }
 

@@ -267,7 +267,11 @@ mod tests {
 
     #[test]
     fn profile_organs_tests_and_fidelity_are_claims() {
-        let mut cx = Cx::new(Arc::new(NoopEvalPolicy), Arc::new(DefaultFactory));
+        let mut cx = Cx::new(
+            Arc::new(NoopEvalPolicy),
+            Arc::new(DefaultFactory),
+            crate::HandleSeed::new(7),
+        );
         let profile = Symbol::qualified("standard", "rust-clean");
         let organ = Symbol::qualified("standard", "reader");
         let test = Symbol::qualified("test", "reader-roundtrip");
@@ -298,7 +302,11 @@ mod tests {
 
     #[test]
     fn profile_and_organ_claims_project_to_cards() {
-        let mut cx = Cx::new(Arc::new(NoopEvalPolicy), Arc::new(DefaultFactory));
+        let mut cx = Cx::new(
+            Arc::new(NoopEvalPolicy),
+            Arc::new(DefaultFactory),
+            crate::HandleSeed::new(7),
+        );
         let profile = Symbol::qualified("standard", "rust-clean");
         let organ = Symbol::qualified("standard", "reader");
         let test = Symbol::qualified("test", "reader-roundtrip");
