@@ -190,6 +190,9 @@ pub use shape::{
     ShapeMatchObject, call_shape, shape_is_subshape_of, shape_match_value,
 };
 pub use stream::Stream;
-pub use table::{AssocTable, Dir, Table, TableBackend, TableRegistry};
+pub use table::{
+    AssocTable, Dir, Table, TableBackend, TableCompareExchange, TableExpected, TableObserved,
+    TableRegistry, TableReplacement,
+};
 pub use term::{OpKey, Term};
 pub use value::{RuntimeObject, Value};
