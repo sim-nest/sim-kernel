@@ -94,6 +94,23 @@ impl Registry {
             .collect()
     }
 
+    pub(crate) fn retain_sequence_floor(
+        &mut self,
+        floor: &std::collections::BTreeMap<Symbol, u64>,
+    ) -> Result<()> {
+        for (kind, next) in floor {
+            let current = sequence_next(&self.catalog, kind).unwrap_or(1);
+            if *next > current {
+                let name = SEQUENCE_KINDS
+                    .into_iter()
+                    .find(|name| kind == &Symbol::new(*name))
+                    .ok_or_else(|| Error::Lib(format!("unknown registry sequence {kind}")))?;
+                self.set_catalog_sequence_next(name, *next)?;
+            }
+        }
+        Ok(())
+    }
+
     pub(crate) fn commit_direct_runtime_registration(
         &mut self,
         kind: ExportKind,

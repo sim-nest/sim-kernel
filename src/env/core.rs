@@ -85,10 +85,10 @@ pub struct Cx {
     table_registry: TableRegistry,
     promotion_search_limits: PromotionSearchLimits,
     sources: SourceRegistry,
-    datum_store: BTreeDatumStore,
+    pub(super) datum_store: BTreeDatumStore,
     handles: BTreeHandleStore,
-    facts: BTreeFactStore,
-    lib_load_ledger: LibLoadLedger,
+    pub(super) facts: BTreeFactStore,
+    pub(super) lib_load_ledger: LibLoadLedger,
     effect_ledger: EffectLedger,
     control_policy: ControlPolicyRef,
 }

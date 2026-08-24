@@ -165,6 +165,7 @@ impl Registry {
             trusted,
             registry,
             pending: PendingExports::default(),
+            stable_exports: BTreeMap::new(),
         })
     }
 
