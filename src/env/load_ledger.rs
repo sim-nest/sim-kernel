@@ -2,7 +2,7 @@ use std::collections::BTreeMap;
 
 use crate::{ContentId, fact_store::BTreeFactStore, id::LibId};
 
-#[derive(Default)]
+#[derive(Clone, Default)]
 pub(super) struct LibLoadLedger {
     claims_by_lib: BTreeMap<LibId, Vec<ContentId>>,
 }

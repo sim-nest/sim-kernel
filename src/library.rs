@@ -4,6 +4,8 @@
 //! and loader contracts plus manifest and version metadata; the libraries
 //! supply the behavior these registries make available.
 
+#[cfg(test)]
+mod activation_tests;
 mod boot;
 mod boot_codec;
 mod claims;

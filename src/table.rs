@@ -19,6 +19,42 @@ use crate::{
     value::{RuntimeObject, Value},
 };
 
+/// Expected state supplied to an atomic table compare-exchange.
+#[derive(Clone, Debug, PartialEq)]
+pub enum TableExpected {
+    /// The key must not be present (distinct from a present `nil`).
+    Absent,
+    /// The key must contain a value with this canonical semantic expression.
+    Value(Expr),
+}
+
+/// Mutation performed when a table compare-exchange matches.
+#[derive(Clone)]
+pub enum TableReplacement {
+    /// Remove the entry.
+    Delete,
+    /// Store this value.
+    Value(Value),
+}
+
+/// State observed at the linearization point of compare-exchange.
+#[derive(Clone, Debug, PartialEq)]
+pub enum TableObserved {
+    /// The key was absent.
+    Absent,
+    /// The key was present, including when this expression is `nil`.
+    Value(Expr),
+}
+
+/// Result of an atomic table compare-exchange.
+#[derive(Clone, Debug, PartialEq)]
+pub struct TableCompareExchange {
+    /// Whether the replacement was applied.
+    pub exchanged: bool,
+    /// State observed before any successful replacement.
+    pub observed: TableObserved,
+}
+
 /// Universal map surface. Keys are symbols; values are runtime values.
 pub trait Table: RuntimeObject {
     /// Symbol identifying the backend representation.
@@ -52,6 +88,23 @@ pub trait Table: RuntimeObject {
 
     /// Removes all entries.
     fn clear(&self, cx: &mut Cx) -> Result<()>;
+
+    /// Atomically replaces `key` iff its state equals `expected`.
+    ///
+    /// Equality is canonical semantic [`Expr`] equality. Implementations must
+    /// establish one linearization point or honestly report unsupported.
+    fn compare_exchange(
+        &self,
+        _cx: &mut Cx,
+        _key: Symbol,
+        _expected: TableExpected,
+        _replacement: TableReplacement,
+    ) -> Result<TableCompareExchange> {
+        Err(Error::Eval(format!(
+            "table/compare-exchange unsupported by {}",
+            self.backend_symbol()
+        )))
+    }
 
     /// Projects the table to an [`Expr::Map`].
     fn as_table_expr(&self, cx: &mut Cx) -> Result<Expr> {
@@ -213,6 +266,44 @@ impl Table for AssocTable {
     fn clear(&self, _cx: &mut Cx) -> Result<()> {
         self.write_entries()?.clear();
         Ok(())
+    }
+
+    fn compare_exchange(
+        &self,
+        cx: &mut Cx,
+        key: Symbol,
+        expected: TableExpected,
+        replacement: TableReplacement,
+    ) -> Result<TableCompareExchange> {
+        let replacement = match replacement {
+            TableReplacement::Delete => None,
+            TableReplacement::Value(value) => Some((value.object().as_expr(cx)?, value)),
+        };
+        let mut guard = self.write_entries()?;
+        let index = guard.iter().position(|(candidate, _)| *candidate == key);
+        let observed = match index {
+            Some(index) => TableObserved::Value(guard[index].1.object().as_expr(cx)?),
+            None => TableObserved::Absent,
+        };
+        let matches = match (&expected, &observed) {
+            (TableExpected::Absent, TableObserved::Absent) => true,
+            (TableExpected::Value(left), TableObserved::Value(right)) => left == right,
+            _ => false,
+        };
+        if matches {
+            match (index, replacement) {
+                (Some(index), None) => {
+                    guard.remove(index);
+                }
+                (None, None) => {}
+                (Some(index), Some((_, value))) => guard[index].1 = value,
+                (None, Some((_, value))) => guard.push((key, value)),
+            }
+        }
+        Ok(TableCompareExchange {
+            exchanged: matches,
+            observed,
+        })
     }
 }
 

@@ -44,6 +44,7 @@ pub struct Effect {
 impl Effect {
     /// Build an effect with a fresh handle id and no requirements.
     pub fn new(
+        id: HandleId,
         kind: Symbol,
         subject: Ref,
         input: Ref,
@@ -52,7 +53,7 @@ impl Effect {
         abort_op: OpKey,
     ) -> Self {
         Self {
-            id: Ref::Handle(HandleId::fresh()),
+            id: Ref::Handle(id),
             kind,
             subject,
             input,
@@ -121,13 +122,18 @@ pub struct EffectRecord {
 ///
 /// ```
 /// # use std::sync::Arc;
-/// # use sim_kernel::{DefaultFactory, NoopEvalPolicy};
+/// # use sim_kernel::{DefaultFactory, HandleSeed, NoopEvalPolicy};
 /// # use sim_kernel::env::Cx;
 /// # use sim_kernel::effect::{Effect, resolve_effect, effect_resume_op_key, effect_abort_op_key};
 /// # use sim_kernel::id::Symbol;
 /// # use sim_kernel::ref_id::Ref;
-/// let mut cx = Cx::new(Arc::new(NoopEvalPolicy), Arc::new(DefaultFactory));
+/// let mut cx = Cx::new(
+///     Arc::new(NoopEvalPolicy),
+///     Arc::new(DefaultFactory),
+///     HandleSeed::new(7),
+/// );
 /// let effect = Effect::new(
+///     cx.fresh_handle(),
 ///     Symbol::qualified("effect", "tool-call"),
 ///     Ref::Symbol(Symbol::qualified("test", "tool")),
 ///     Ref::Symbol(Symbol::new("input")),
@@ -378,6 +384,7 @@ mod tests {
 
     fn effect(input: Ref) -> Effect {
         Effect::new(
+            HandleId::from_seed_and_sequence(crate::HandleSeed::new(7), 1),
             effect_test_kind("tool-call"),
             Ref::Symbol(Symbol::qualified("test", "tool")),
             input,

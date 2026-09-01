@@ -1,3 +1,5 @@
+use std::collections::BTreeMap;
+
 use crate::{
     error::Result,
     id::{
@@ -46,6 +48,7 @@ pub struct LoadTransaction {
     pub(crate) trusted: bool,
     pub(crate) registry: Registry,
     pub(crate) pending: PendingExports,
+    pub(crate) stable_exports: BTreeMap<(ExportKind, Symbol), RuntimeId>,
 }
 
 /// The handle a [`Lib`](crate::library::Lib) uses to register its exports.
@@ -58,6 +61,7 @@ pub struct Linker<'a> {
     registry: &'a mut Registry,
     lib: LibId,
     pending: &'a mut PendingExports,
+    stable_exports: &'a BTreeMap<(ExportKind, Symbol), RuntimeId>,
 }
 
 impl<'a> Linker<'a> {
@@ -65,12 +69,18 @@ impl<'a> Linker<'a> {
         registry: &'a mut Registry,
         lib: LibId,
         pending: &'a mut PendingExports,
+        stable_exports: &'a BTreeMap<(ExportKind, Symbol), RuntimeId>,
     ) -> Self {
         Self {
             registry,
             lib,
             pending,
+            stable_exports,
         }
+    }
+
+    fn stable_id(&self, kind: ExportKind, symbol: &Symbol) -> Option<RuntimeId> {
+        self.stable_exports.get(&(kind, symbol.clone())).copied()
     }
 
     /// The id of the library being loaded.
@@ -85,7 +95,13 @@ impl<'a> Linker<'a> {
 
     /// Stages a class export under `symbol`, reserving a fresh class id.
     pub fn class(&mut self, symbol: Symbol) -> Result<ClassId> {
-        let id = self.registry.try_fresh_class_id()?;
+        let id = match self.stable_id(ExportKind::named(ExportKind::CLASS), &symbol) {
+            Some(RuntimeId::Class(id)) => {
+                self.registry.reserve_class_id(id)?;
+                id
+            }
+            _ => self.registry.try_fresh_class_id()?,
+        };
         self.pending.exports.push(Export::Class {
             symbol,
             class_id: Some(id),
@@ -119,7 +135,13 @@ impl<'a> Linker<'a> {
 
     /// Stages a function export under `symbol`, reserving a fresh function id.
     pub fn function(&mut self, symbol: Symbol) -> Result<FunctionId> {
-        let id = self.registry.try_fresh_function_id()?;
+        let id = match self.stable_id(ExportKind::named(ExportKind::FUNCTION), &symbol) {
+            Some(RuntimeId::Function(id)) => {
+                self.registry.reserve_function_id(id)?;
+                id
+            }
+            _ => self.registry.try_fresh_function_id()?,
+        };
         self.pending.exports.push(Export::Function {
             symbol,
             function_id: Some(id),
@@ -142,7 +164,13 @@ impl<'a> Linker<'a> {
 
     /// Stages a macro export under `symbol`, reserving a fresh macro id.
     pub fn macro_export(&mut self, symbol: Symbol) -> Result<MacroId> {
-        let id = self.registry.try_fresh_macro_id()?;
+        let id = match self.stable_id(ExportKind::named(ExportKind::MACRO), &symbol) {
+            Some(RuntimeId::Macro(id)) => {
+                self.registry.reserve_macro_id(id)?;
+                id
+            }
+            _ => self.registry.try_fresh_macro_id()?,
+        };
         self.pending.exports.push(Export::Macro {
             symbol,
             macro_id: Some(id),
@@ -159,7 +187,13 @@ impl<'a> Linker<'a> {
 
     /// Stages a shape export under `symbol`, reserving a fresh shape id.
     pub fn shape(&mut self, symbol: Symbol) -> Result<ShapeId> {
-        let id = self.registry.try_fresh_shape_id()?;
+        let id = match self.stable_id(ExportKind::named(ExportKind::SHAPE), &symbol) {
+            Some(RuntimeId::Shape(id)) => {
+                self.registry.reserve_shape_id(id)?;
+                id
+            }
+            _ => self.registry.try_fresh_shape_id()?,
+        };
         self.pending.exports.push(Export::Shape {
             symbol,
             shape_id: Some(id),
@@ -176,7 +210,13 @@ impl<'a> Linker<'a> {
 
     /// Stages a codec export under `symbol`, reserving a fresh codec id.
     pub fn codec(&mut self, symbol: Symbol) -> Result<CodecId> {
-        let id = self.registry.try_fresh_codec_id()?;
+        let id = match self.stable_id(ExportKind::named(ExportKind::CODEC), &symbol) {
+            Some(RuntimeId::Codec(id)) => {
+                self.registry.reserve_codec_id(id)?;
+                id
+            }
+            _ => self.registry.try_fresh_codec_id()?,
+        };
         self.pending.exports.push(Export::Codec {
             symbol,
             codec_id: Some(id),
@@ -193,7 +233,13 @@ impl<'a> Linker<'a> {
 
     /// Stages a number-domain export under `symbol`, reserving a fresh id.
     pub fn number_domain(&mut self, symbol: Symbol) -> Result<NumberDomainId> {
-        let id = self.registry.try_fresh_number_domain_id()?;
+        let id = match self.stable_id(ExportKind::named(ExportKind::NUMBER_DOMAIN), &symbol) {
+            Some(RuntimeId::NumberDomain(id)) => {
+                self.registry.reserve_number_domain_id(id)?;
+                id
+            }
+            _ => self.registry.try_fresh_number_domain_id()?,
+        };
         self.pending.exports.push(Export::NumberDomain {
             symbol,
             number_domain_id: Some(id),
@@ -213,7 +259,13 @@ impl<'a> Linker<'a> {
     /// The registry stores the value under the export symbol; concrete
     /// `EvalSite` behavior belongs to libraries that query the site registry.
     pub fn site_value(&mut self, symbol: Symbol, value: Value) -> Result<RuntimeId> {
-        let site_id = self.registry.try_fresh_site_id()?;
+        let site_id = match self.stable_id(ExportKind::named(ExportKind::SITE), &symbol) {
+            Some(RuntimeId::Site(id)) => {
+                self.registry.reserve_site_id(id)?;
+                id
+            }
+            _ => self.registry.try_fresh_site_id()?,
+        };
         let runtime_id = RuntimeId::Site(site_id);
         self.pending.exports.push(Export::Site {
             symbol,
@@ -325,6 +377,11 @@ impl<'a> Linker<'a> {
 impl LoadTransaction {
     /// Borrows a [`Linker`] over this transaction's registry and pending buffer.
     pub fn linker(&mut self) -> Linker<'_> {
-        Linker::new(&mut self.registry, self.lib_id, &mut self.pending)
+        Linker::new(
+            &mut self.registry,
+            self.lib_id,
+            &mut self.pending,
+            &self.stable_exports,
+        )
     }
 }

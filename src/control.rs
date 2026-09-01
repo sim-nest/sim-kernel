@@ -172,7 +172,7 @@ pub fn prompt<F>(cx: &mut Cx, prompt: ControlPrompt, body: F) -> Result<Ref>
 where
     F: FnOnce(&mut Cx) -> Result<Ref>,
 {
-    let effect = prompt_effect(&prompt);
+    let effect = prompt_effect(cx.fresh_handle(), &prompt);
     resolve_effect(cx, effect, |cx, _effect| {
         let policy = cx.control_policy_ref();
         policy.enter_prompt(cx, &prompt)?;
@@ -191,7 +191,7 @@ pub fn capture(cx: &mut Cx, capture: ControlCapture) -> Result<Ref> {
 
 /// Abort to a prompt with a value via the active control policy.
 pub fn abort(cx: &mut Cx, abort: ControlAbort) -> Result<Ref> {
-    let effect = abort_effect(&abort);
+    let effect = abort_effect(cx.fresh_handle(), &abort);
     resolve_effect(cx, effect, |cx, _effect| {
         let policy = cx.control_policy_ref();
         policy.abort(cx, &abort)
@@ -200,7 +200,7 @@ pub fn abort(cx: &mut Cx, abort: ControlAbort) -> Result<Ref> {
 
 /// Resume a captured continuation with a value via the active control policy.
 pub fn resume(cx: &mut Cx, resume: ControlResume) -> Result<Ref> {
-    let effect = resume_effect(&resume);
+    let effect = resume_effect(cx.fresh_handle(), &resume);
     resolve_effect(cx, effect, |cx, _effect| {
         let policy = cx.control_policy_ref();
         policy.resume(cx, &resume)
@@ -208,8 +208,9 @@ pub fn resume(cx: &mut Cx, resume: ControlResume) -> Result<Ref> {
 }
 
 /// Build the capability-gated effect that requests a control prompt.
-pub fn prompt_effect(prompt: &ControlPrompt) -> Effect {
+pub fn prompt_effect(id: crate::HandleId, prompt: &ControlPrompt) -> Effect {
     Effect::new(
+        id,
         effect_control_prompt_kind(),
         prompt.prompt.clone(),
         prompt.input.clone(),
@@ -235,6 +236,7 @@ pub fn capture_effect(cx: &mut Cx, capture: &ControlCapture) -> Result<Effect> {
         ],
     )?;
     Ok(Effect::new(
+        cx.fresh_handle(),
         effect_control_capture_kind(),
         capture.prompt.clone(),
         input,
@@ -249,8 +251,9 @@ pub fn capture_effect(cx: &mut Cx, capture: &ControlCapture) -> Result<Effect> {
 }
 
 /// Build the capability-gated effect that requests an abort.
-pub fn abort_effect(abort: &ControlAbort) -> Effect {
+pub fn abort_effect(id: crate::HandleId, abort: &ControlAbort) -> Effect {
     Effect::new(
+        id,
         effect_control_abort_kind(),
         abort.prompt.clone(),
         abort.value.clone(),
@@ -262,8 +265,9 @@ pub fn abort_effect(abort: &ControlAbort) -> Effect {
 }
 
 /// Build the capability-gated effect that requests a resume.
-pub fn resume_effect(resume: &ControlResume) -> Effect {
+pub fn resume_effect(id: crate::HandleId, resume: &ControlResume) -> Effect {
     Effect::new(
+        id,
         effect_control_resume_kind(),
         resume.continuation.clone(),
         resume.value.clone(),

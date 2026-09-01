@@ -58,7 +58,11 @@ use crate::{
 ///     }
 /// }
 ///
-/// let mut cx = Cx::new(Arc::new(NoopEvalPolicy), Arc::new(DefaultFactory));
+/// let mut cx = Cx::new(
+///     Arc::new(NoopEvalPolicy),
+///     Arc::new(DefaultFactory),
+///     sim_kernel::HandleSeed::new(7),
+/// );
 /// let value = cx.factory().string("ok".to_owned()).unwrap();
 /// let matched = AnyShape.check_value(&mut cx, value).unwrap();
 /// assert!(matched.accepted);

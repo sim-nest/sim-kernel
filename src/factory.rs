@@ -305,7 +305,11 @@ mod tests {
 
     #[test]
     fn class_stub_reports_non_constructible_constructor() {
-        let mut cx = crate::Cx::new(Arc::new(NoopEvalPolicy), Arc::new(DefaultFactory));
+        let mut cx = crate::Cx::new(
+            Arc::new(NoopEvalPolicy),
+            Arc::new(DefaultFactory),
+            crate::HandleSeed::new(7),
+        );
         let symbol = Symbol::qualified("core", "Class");
         let class = cx
             .factory()

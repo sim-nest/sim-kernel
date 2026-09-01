@@ -7,7 +7,11 @@ use crate::{
 };
 
 fn cx() -> crate::Cx {
-    crate::Cx::new(Arc::new(NoopEvalPolicy), Arc::new(DefaultFactory))
+    crate::Cx::new(
+        Arc::new(NoopEvalPolicy),
+        Arc::new(DefaultFactory),
+        crate::HandleSeed::new(7),
+    )
 }
 
 fn table_value<'a>(expr: &'a Expr, key: &str) -> Option<&'a Expr> {

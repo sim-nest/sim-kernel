@@ -7,6 +7,7 @@
 mod base;
 mod core;
 mod fork;
+mod library_state;
 mod load_ledger;
 mod numbers;
 mod promotion;

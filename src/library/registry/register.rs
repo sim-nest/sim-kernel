@@ -25,7 +25,11 @@ impl Registry {
     /// use sim_kernel::library::Registry;
     /// use sim_kernel::{Cx, DefaultFactory, NoopEvalPolicy, Symbol};
     ///
-    /// let mut cx = Cx::new(Arc::new(NoopEvalPolicy), Arc::new(DefaultFactory));
+    /// let mut cx = Cx::new(
+    ///     Arc::new(NoopEvalPolicy),
+    ///     Arc::new(DefaultFactory),
+    ///     sim_kernel::HandleSeed::new(7),
+    /// );
     /// let class = cx.factory().bool(true).unwrap();
     ///
     /// let mut registry = Registry::default();
@@ -419,6 +423,10 @@ impl Registry {
             .map(FunctionId)
     }
 
+    pub(crate) fn reserve_function_id(&mut self, id: FunctionId) -> Result<()> {
+        self.try_reserve_catalog_sequence_at_least(catalog::SEQ_FUNCTION, id.0)
+    }
+
     /// Reserves a fresh stable macro id from the catalog sequence.
     pub fn fresh_macro_id(&mut self) -> MacroId {
         MacroId(self.reserve_catalog_sequence_id(catalog::SEQ_MACRO))
@@ -428,6 +436,10 @@ impl Registry {
     pub fn try_fresh_macro_id(&mut self) -> Result<MacroId> {
         self.try_reserve_catalog_sequence_id(catalog::SEQ_MACRO)
             .map(MacroId)
+    }
+
+    pub(crate) fn reserve_macro_id(&mut self, id: MacroId) -> Result<()> {
+        self.try_reserve_catalog_sequence_at_least(catalog::SEQ_MACRO, id.0)
     }
 
     /// Reserves a fresh stable case id from the catalog sequence.
@@ -452,6 +464,10 @@ impl Registry {
             .map(ShapeId)
     }
 
+    pub(crate) fn reserve_shape_id(&mut self, id: ShapeId) -> Result<()> {
+        self.try_reserve_catalog_sequence_at_least(catalog::SEQ_SHAPE, id.0)
+    }
+
     /// Reserves a fresh stable codec id from the catalog sequence.
     pub fn fresh_codec_id(&mut self) -> CodecId {
         CodecId(self.reserve_catalog_sequence_id(catalog::SEQ_CODEC))
@@ -461,6 +477,10 @@ impl Registry {
     pub fn try_fresh_codec_id(&mut self) -> Result<CodecId> {
         self.try_reserve_catalog_sequence_id(catalog::SEQ_CODEC)
             .map(CodecId)
+    }
+
+    pub(crate) fn reserve_codec_id(&mut self, id: CodecId) -> Result<()> {
+        self.try_reserve_catalog_sequence_at_least(catalog::SEQ_CODEC, id.0)
     }
 
     /// Reserves a fresh stable number-domain id from the catalog sequence.
@@ -475,6 +495,10 @@ impl Registry {
             .map(NumberDomainId)
     }
 
+    pub(crate) fn reserve_number_domain_id(&mut self, id: NumberDomainId) -> Result<()> {
+        self.try_reserve_catalog_sequence_at_least(catalog::SEQ_NUMBER_DOMAIN, id.0)
+    }
+
     /// Reserves a fresh stable site id from the catalog sequence.
     pub fn fresh_site_id(&mut self) -> SiteId {
         SiteId(self.reserve_catalog_sequence_id(catalog::SEQ_SITE))
@@ -484,6 +508,10 @@ impl Registry {
     pub fn try_fresh_site_id(&mut self) -> Result<SiteId> {
         self.try_reserve_catalog_sequence_id(catalog::SEQ_SITE)
             .map(SiteId)
+    }
+
+    pub(crate) fn reserve_site_id(&mut self, id: SiteId) -> Result<()> {
+        self.try_reserve_catalog_sequence_at_least(catalog::SEQ_SITE, id.0)
     }
 
     pub(crate) fn insert_runtime_export(

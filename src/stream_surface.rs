@@ -90,15 +90,17 @@ fn insert_once(cx: &mut Cx, subject: Ref, predicate: Symbol, object: Ref) -> Res
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{
-        ContentId, Coordinate, DefaultFactory, Expr, HandleId, NoopEvalPolicy, card::card_for_ref,
-    };
+    use crate::{ContentId, Coordinate, DefaultFactory, Expr, NoopEvalPolicy, card::card_for_ref};
     use std::sync::Arc;
 
     #[test]
     fn stream_metadata_and_packet_events_use_claims_and_refs() {
-        let mut cx = Cx::new(Arc::new(NoopEvalPolicy), Arc::new(DefaultFactory));
-        let stream = Ref::Handle(HandleId::fresh());
+        let mut cx = Cx::new(
+            Arc::new(NoopEvalPolicy),
+            Arc::new(DefaultFactory),
+            crate::HandleSeed::new(7),
+        );
+        let stream = Ref::Handle(cx.fresh_handle());
         publish_stream_metadata_claims(
             &mut cx,
             stream.clone(),
@@ -134,8 +136,12 @@ mod tests {
 
     #[test]
     fn stream_metadata_and_payload_rules_project_to_cards() {
-        let mut cx = Cx::new(Arc::new(NoopEvalPolicy), Arc::new(DefaultFactory));
-        let stream = Ref::Handle(HandleId::fresh());
+        let mut cx = Cx::new(
+            Arc::new(NoopEvalPolicy),
+            Arc::new(DefaultFactory),
+            crate::HandleSeed::new(7),
+        );
+        let stream = Ref::Handle(cx.fresh_handle());
         publish_stream_metadata_claims(
             &mut cx,
             stream.clone(),

@@ -53,7 +53,11 @@ impl Shape for ParentShape {
 }
 
 fn cx() -> crate::Cx {
-    crate::Cx::new(Arc::new(NoopEvalPolicy), Arc::new(DefaultFactory))
+    crate::Cx::new(
+        Arc::new(NoopEvalPolicy),
+        Arc::new(DefaultFactory),
+        crate::HandleSeed::new(7),
+    )
 }
 
 fn parent_shape(cx: &mut crate::Cx, name: &str) -> (ShapeRef, Arc<Mutex<Vec<ShapeRef>>>) {

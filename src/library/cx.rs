@@ -7,8 +7,101 @@ use crate::{
 
 use super::claims::publish_loaded_lib_claims;
 use super::loaders::dependency_satisfied;
+use std::collections::BTreeMap;
 
 impl Cx {
+    /// Atomically activates an already constructed library candidate.
+    ///
+    /// `None` admits only an absent symbol. `Some(id)` replaces exactly that
+    /// loaded leaf while retaining the library and matching export ids. Only
+    /// kernel-observable library state is staged; provider effects are outside
+    /// this transaction because `Lib::load` receives only `LoadCx` and `Linker`.
+    pub fn activate_lib(&mut self, expected: Option<LibId>, lib: &dyn Lib) -> Result<LibId> {
+        let manifest = lib.manifest();
+        let current = self.registry.lib(&manifest.id).cloned();
+        match (expected, current.as_ref()) {
+            (None, None) => {}
+            (None, Some(_)) => {
+                return Err(Error::DuplicateLib {
+                    symbol: manifest.id.clone(),
+                });
+            }
+            (Some(id), Some(loaded)) if loaded.id == id => {}
+            (Some(id), _) => {
+                return Err(Error::Lib(format!(
+                    "activation expected library id {id:?} for {}",
+                    manifest.id
+                )));
+            }
+        }
+
+        if expected.is_none() {
+            let mut staged = self.library_state();
+            let id = self.with_library_state(&mut staged, |cx| cx.load_lib(lib))?;
+            self.commit_library_state(staged);
+            return Ok(id);
+        }
+
+        let loaded = current.expect("validated loaded replacement");
+        let id = loaded.id;
+        let stable_exports = loaded
+            .exports
+            .iter()
+            .filter_map(|record| match record.state {
+                crate::library::ExportState::Resolved { id } => {
+                    Some(((record.kind.clone(), record.symbol.clone()), id))
+                }
+                _ => None,
+            })
+            .collect::<BTreeMap<_, _>>();
+        let mut staged = self.library_state();
+        let result = self.with_library_state(&mut staged, |cx| {
+            for capability in &manifest.capabilities {
+                cx.require(capability)?;
+            }
+            for dependency in &manifest.requires {
+                if let Some(found) = cx.registry.manifest_by_symbol(&dependency.id)
+                    && !dependency_satisfied(found, dependency)
+                {
+                    return Err(Error::DependencyVersionMismatch {
+                        lib: manifest.id.clone(),
+                        dependency: dependency.id.clone(),
+                        required: dependency
+                            .minimum_version
+                            .clone()
+                            .unwrap_or_else(|| Version(String::from("0"))),
+                        loaded: found.version.clone(),
+                    });
+                }
+            }
+            let sequence_floor = cx.registry.catalog_sequence_snapshot();
+            cx.registry.unload(id)?;
+            cx.remove_load_claims(&[id]);
+            cx.registry.retain_sequence_floor(&sequence_floor)?;
+            let trusted = matches!(manifest.target, LibTarget::HostRegistered);
+            let mut txn = cx.registry.try_begin_load(manifest.clone(), trusted)?;
+            txn.lib_id = id;
+            txn.stable_exports = stable_exports;
+            {
+                let mut load_cx = cx.load_cx();
+                lib.load(&mut load_cx, &mut txn.linker())?;
+            }
+            let committed = cx.registry.commit_load(txn)?;
+            let loaded = cx
+                .registry
+                .libs()
+                .iter()
+                .find(|item| item.id == committed)
+                .cloned()
+                .ok_or_else(|| Error::Lib("activated library missing after commit".to_owned()))?;
+            let claims = publish_loaded_lib_claims(cx, &loaded)?;
+            cx.record_load_claims(committed, claims);
+            Ok(committed)
+        })?;
+        self.commit_library_state(staged);
+        Ok(result)
+    }
+
     /// Loads a single library: checks its requested capabilities and dependency
     /// versions, runs its [`Lib::load`](crate::library::Lib::load) against a
     /// load transaction, commits the result, and publishes its load claims.

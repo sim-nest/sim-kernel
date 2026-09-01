@@ -430,7 +430,11 @@ mod tests {
         use crate::{Cx, DefaultFactory, NoopEvalPolicy};
 
         let cap = read_eval_capability();
-        let (mut cx, seat) = Cx::new_seated(Arc::new(NoopEvalPolicy), Arc::new(DefaultFactory));
+        let (mut cx, seat) = Cx::new_seated(
+            Arc::new(NoopEvalPolicy),
+            Arc::new(DefaultFactory),
+            crate::HandleSeed::new(7),
+        );
         // A freshly seated context grants nothing until the host uses the seat.
         assert!(cx.require(&cap).is_err());
         seat.grant(&mut cx, cap.clone()).unwrap();
@@ -446,10 +450,16 @@ mod tests {
         // The escalation a loaded callable would attempt: it holds `victim`
         // (its own &mut Cx) and mints a fresh throwaway pair, then tries to use
         // the throwaway seat to grant into `victim`.
-        let (mut victim, _victim_seat) =
-            Cx::new_seated(Arc::new(NoopEvalPolicy), Arc::new(DefaultFactory));
-        let (_throwaway, forged) =
-            Cx::new_seated(Arc::new(NoopEvalPolicy), Arc::new(DefaultFactory));
+        let (mut victim, _victim_seat) = Cx::new_seated(
+            Arc::new(NoopEvalPolicy),
+            Arc::new(DefaultFactory),
+            crate::HandleSeed::new(7),
+        );
+        let (_throwaway, forged) = Cx::new_seated(
+            Arc::new(NoopEvalPolicy),
+            Arc::new(DefaultFactory),
+            crate::HandleSeed::new(8),
+        );
         assert!(matches!(
             forged.grant(&mut victim, read_eval_capability()),
             Err(Error::ForeignGrantSeat)

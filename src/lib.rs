@@ -141,6 +141,7 @@ pub use fact_store::{BTreeFactStore, FactStore};
 pub use factory::{DefaultFactory, Factory};
 pub use handle_store::{BTreeHandleStore, HandleStore};
 pub use hint::HintMetadata;
+pub use ref_id::{ContentId, Coordinate, HandleId, HandleSeed, HandleSequence, Ref};
 #[rustfmt::skip]
 pub use id::{CORE_BOOL_CLASS_ID, CORE_BYTES_CLASS_ID, CORE_CARD_CLASS_ID, CORE_CLASS_CLASS_ID, CORE_CODEC_CLASS_ID, CORE_EVAL_REPLY_CLASS_ID, CORE_EVAL_REQUEST_CLASS_ID, CORE_EXPR_CLASS_ID, CORE_FUNCTION_CLASS_ID, CORE_HELP_CLASS_ID, CORE_LIST_CLASS_ID, CORE_LOCAL_EVAL_FABRIC_CLASS_ID, CORE_MACRO_CLASS_ID, CORE_NIL_CLASS_ID, CORE_NUMBER_CLASS_ID, CORE_NUMBER_DOMAIN_CLASS_ID, CORE_SEQUENCE_CLASS_ID, CORE_SHAPE_CLASS_ID, CORE_SHAPE_MATCH_CLASS_ID, CORE_STRING_CLASS_ID, CORE_SYMBOL_CLASS_ID, CORE_TABLE_CLASS_ID, CORE_TEST_CLASS_ID, CORE_THUNK_CLASS_ID, CaseId, ClassId, CodecId, FunctionId, LibId, MacroId, NumberDomainId, RuntimeId, ShapeId, SiteId, Symbol, ValueId};
 pub use library::{
@@ -179,7 +180,6 @@ pub use realize::{
     BufferedEventSource, ObserveMode, RealizeRequest, drain_events_to_reply, realize_events,
     realize_final,
 };
-pub use ref_id::{ContentId, Coordinate, HandleId, Ref};
 pub use ref_resolver::{
     RefResolver, ResolvedRef, TemporaryRefResolver, value_from_datum, value_from_ref,
 };
@@ -190,6 +190,9 @@ pub use shape::{
     ShapeMatchObject, call_shape, shape_is_subshape_of, shape_match_value,
 };
 pub use stream::Stream;
-pub use table::{AssocTable, Dir, Table, TableBackend, TableRegistry};
+pub use table::{
+    AssocTable, Dir, Table, TableBackend, TableCompareExchange, TableExpected, TableObserved,
+    TableRegistry, TableReplacement,
+};
 pub use term::{OpKey, Term};
 pub use value::{RuntimeObject, Value};
