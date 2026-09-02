@@ -17,11 +17,11 @@
     {
       "description": "Repository-local validation commands for sim-kernel.",
       "generated_readme": true,
-      "manifest": "xtask/Cargo.toml",
+      "manifest": "crates/xtask/Cargo.toml",
       "name": "xtask",
       "publish": "false",
-      "readme": "xtask/README.md",
-      "root": "xtask",
+      "readme": "crates/xtask/README.md",
+      "root": "crates/xtask",
       "target_kinds": [
         "bin"
       ]

@@ -6,7 +6,7 @@ Repository-local validation commands for sim-kernel.
 
 ## Package Metadata
 
-- Manifest: `xtask/Cargo.toml`
+- Manifest: `crates/xtask/Cargo.toml`
 - Publish: `false`
 - Targets: `bin`
 
