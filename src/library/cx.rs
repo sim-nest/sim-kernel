@@ -164,7 +164,7 @@ impl Cx {
     /// commit has already happened when `check` fails, so callers that need an atomic refusal
     /// run this inside a staged library state (as [`Self::activate_lib_checked`] does) or in
     /// a throwaway context.
-    pub fn load_lib_checked(
+    fn load_lib_checked(
         &mut self,
         lib: &dyn Lib,
         check_manifest: impl FnOnce(&crate::library::LibManifest) -> std::result::Result<(), String>,
