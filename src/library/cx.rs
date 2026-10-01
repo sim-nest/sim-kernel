@@ -2,7 +2,7 @@ use crate::{
     LibId,
     env::Cx,
     error::{Error, Result},
-    library::{Lib, LibTarget, Version},
+    library::{Lib, LibTarget, LoadedLib, Version},
 };
 
 use super::claims::publish_loaded_lib_claims;
@@ -17,6 +17,33 @@ impl Cx {
     /// kernel-observable library state is staged; provider effects are outside
     /// this transaction because `Lib::load` receives only `LoadCx` and `Linker`.
     pub fn activate_lib(&mut self, expected: Option<LibId>, lib: &dyn Lib) -> Result<LibId> {
+        self.activate_lib_checked(expected, lib, |_| Ok(()))
+    }
+
+    /// Same as [`activate_lib`](Self::activate_lib), but `check` runs against
+    /// the library's actual committed [`LoadedLib`] while that commit is
+    /// still staged, not yet visible outside this call.
+    ///
+    /// `lib.load` runs exactly once more here than in a caller's own
+    /// preflight probe of the same candidate (for example a shadow-context
+    /// dry run): nothing before this method's own staged commit can observe
+    /// what THIS specific invocation of `Lib::load` actually produces. A
+    /// hostile library can return a small, compliant result to a probe load
+    /// and a large or otherwise noncompliant one here. `check` is the only
+    /// place that result can be rejected before it is real: once this method
+    /// returns `Ok`, the activation has committed and a caller cannot safely
+    /// report failure without risking a partial effect. If `check` returns
+    /// `Err`, this call also returns `Err` and the live registry, datum
+    /// store, facts and load ledger are byte-for-byte what they were before
+    /// this call -- the same staged-then-conditionally-committed transaction
+    /// `activate_lib` itself already used, just with one more fallible step
+    /// before the commit.
+    pub fn activate_lib_checked(
+        &mut self,
+        expected: Option<LibId>,
+        lib: &dyn Lib,
+        check: impl FnOnce(&LoadedLib) -> std::result::Result<(), String>,
+    ) -> Result<LibId> {
         let manifest = lib.manifest();
         let current = self.registry.lib(&manifest.id).cloned();
         match (expected, current.as_ref()) {
@@ -37,7 +64,20 @@ impl Cx {
 
         if expected.is_none() {
             let mut staged = self.library_state();
-            let id = self.with_library_state(&mut staged, |cx| cx.load_lib(lib))?;
+            let result: Result<LibId> = self.with_library_state(&mut staged, |cx| {
+                let id = cx.load_lib(lib)?;
+                let loaded = cx
+                    .registry
+                    .libs()
+                    .iter()
+                    .find(|item| item.id == id)
+                    .ok_or_else(|| {
+                        Error::Lib("activated library missing after commit".to_owned())
+                    })?;
+                check(loaded).map_err(Error::Lib)?;
+                Ok(id)
+            });
+            let id = result?;
             self.commit_library_state(staged);
             return Ok(id);
         }
@@ -94,6 +134,7 @@ impl Cx {
                 .find(|item| item.id == committed)
                 .cloned()
                 .ok_or_else(|| Error::Lib("activated library missing after commit".to_owned()))?;
+            check(&loaded).map_err(Error::Lib)?;
             let claims = publish_loaded_lib_claims(cx, &loaded)?;
             cx.record_load_claims(committed, claims);
             Ok(committed)

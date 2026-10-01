@@ -115,3 +115,61 @@ fn replacement_refuses_wrong_id_and_dependents_without_mutation() {
     ));
     assert_eq!(cx.registry().catalog_snapshot(), before);
 }
+
+#[test]
+fn checked_initial_install_refuses_without_committing_when_check_fails() {
+    // The check runs against the ACTUAL committed LoadedLib, inside the
+    // still-staged transaction: a caller cannot distinguish "check ran and
+    // rejected" from "Lib::load itself failed" by registry side effects --
+    // both leave the live state byte-for-byte unchanged.
+    let mut cx = Cx::stub();
+    let before = cx.registry().catalog_snapshot();
+    let error = cx
+        .activate_lib_checked(None, &library("0.1.0", true, false), |loaded| {
+            Err(format!("rejected {} exports", loaded.exports.len()))
+        })
+        .unwrap_err();
+    assert!(matches!(error, Error::Lib(message) if message.contains("rejected")));
+    assert_eq!(cx.registry().catalog_snapshot(), before);
+    assert!(cx.registry().lib(&Symbol::new("activation-lib")).is_none());
+}
+
+#[test]
+fn checked_initial_install_commits_when_check_passes() {
+    let mut cx = Cx::stub();
+    let id = cx
+        .activate_lib_checked(None, &library("0.1.0", true, false), |loaded| {
+            assert_eq!(loaded.exports.len(), 2);
+            Ok(())
+        })
+        .unwrap();
+    assert!(cx.registry().lib(&Symbol::new("activation-lib")).is_some());
+    assert_eq!(
+        cx.registry()
+            .lib(&Symbol::new("activation-lib"))
+            .unwrap()
+            .id,
+        id
+    );
+}
+
+#[test]
+fn checked_replacement_refuses_without_committing_when_check_fails() {
+    // Same property on the replace path (`expected: Some(id)`), which is its
+    // own, separately staged transaction in `activate_lib`/`activate_lib_checked`.
+    let mut cx = Cx::stub();
+    let id = cx
+        .activate_lib(None, &library("0.1.0", true, false))
+        .unwrap();
+    let function = cx.registry().functions()[&Symbol::new("activation-first")];
+    let captured = cx.registry().function_value(function).unwrap().clone();
+    let before = cx.registry().catalog_snapshot();
+    let error = cx
+        .activate_lib_checked(Some(id), &library("0.2.0", false, false), |_| {
+            Err("rejected replacement".to_owned())
+        })
+        .unwrap_err();
+    assert!(matches!(error, Error::Lib(message) if message.contains("rejected replacement")));
+    assert_eq!(cx.registry().catalog_snapshot(), before);
+    assert_eq!(cx.registry().function_value(function), Some(&captured));
+}
