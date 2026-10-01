@@ -189,13 +189,12 @@ impl Cx {
             .registry
             .libs()
             .iter()
-            .find(|loaded| loaded.id == lib_id);
-        if let Some(stored) = stored {
-            check(stored).map_err(Error::Lib)?;
-            let loaded = stored.clone();
-            let claim_ids = publish_loaded_lib_claims(self, &loaded)?;
-            self.record_load_claims(lib_id, claim_ids);
-        }
+            .find(|loaded| loaded.id == lib_id)
+            .ok_or_else(|| Error::Lib("loaded library missing after commit".to_owned()))?;
+        check(stored).map_err(Error::Lib)?;
+        let loaded = stored.clone();
+        let claim_ids = publish_loaded_lib_claims(self, &loaded)?;
+        self.record_load_claims(lib_id, claim_ids);
         Ok(lib_id)
     }
 
