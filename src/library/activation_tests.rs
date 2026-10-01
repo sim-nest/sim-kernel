@@ -173,3 +173,36 @@ fn checked_replacement_refuses_without_committing_when_check_fails() {
     assert_eq!(cx.registry().catalog_snapshot(), before);
     assert_eq!(cx.registry().function_value(function), Some(&captured));
 }
+
+#[test]
+fn the_check_sees_the_stored_committed_library_not_a_clone_on_both_paths() {
+    // The check must run on the stored `LoadedLib` BY REFERENCE: a clone made before the
+    // check would sit at a different address (and cost an attacker-sized allocation before
+    // the bound is known). The staged state is swapped into the live context by value, so
+    // the registry's element address is the same one the check observed.
+    let mut cx = Cx::stub();
+    let mut seen = 0usize;
+    let id = cx
+        .activate_lib_checked(None, &library("0.1.0", true, false), |loaded| {
+            seen = loaded as *const _ as usize;
+            Ok(())
+        })
+        .unwrap();
+    let stored = cx.registry().lib(&Symbol::new("activation-lib")).unwrap();
+    assert_eq!(
+        stored as *const _ as usize, seen,
+        "fresh install checked a clone"
+    );
+
+    let mut seen_replacement = 0usize;
+    cx.activate_lib_checked(Some(id), &library("0.2.0", false, false), |loaded| {
+        seen_replacement = loaded as *const _ as usize;
+        Ok(())
+    })
+    .unwrap();
+    let stored = cx.registry().lib(&Symbol::new("activation-lib")).unwrap();
+    assert_eq!(
+        stored as *const _ as usize, seen_replacement,
+        "replacement checked a clone"
+    );
+}

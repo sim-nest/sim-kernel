@@ -64,19 +64,10 @@ impl Cx {
 
         if expected.is_none() {
             let mut staged = self.library_state();
-            let result: Result<LibId> = self.with_library_state(&mut staged, |cx| {
-                let id = cx.load_lib(lib)?;
-                let loaded = cx
-                    .registry
-                    .libs()
-                    .iter()
-                    .find(|item| item.id == id)
-                    .ok_or_else(|| {
-                        Error::Lib("activated library missing after commit".to_owned())
-                    })?;
-                check(loaded).map_err(Error::Lib)?;
-                Ok(id)
-            });
+            // The check runs on the stored committed library BEFORE its claims are published
+            // (publication clones and iterates every export), inside the staged transaction.
+            let result: Result<LibId> =
+                self.with_library_state(&mut staged, |cx| cx.load_lib_checked(lib, check));
             let id = result?;
             self.commit_library_state(staged);
             return Ok(id);
@@ -127,14 +118,16 @@ impl Cx {
                 lib.load(&mut load_cx, &mut txn.linker())?;
             }
             let committed = cx.registry.commit_load(txn)?;
-            let loaded = cx
+            // Checked by reference on the stored committed library: no clone precedes the
+            // check. The clone below exists only to publish claims.
+            let stored = cx
                 .registry
                 .libs()
                 .iter()
                 .find(|item| item.id == committed)
-                .cloned()
                 .ok_or_else(|| Error::Lib("activated library missing after commit".to_owned()))?;
-            check(&loaded).map_err(Error::Lib)?;
+            check(stored).map_err(Error::Lib)?;
+            let loaded = stored.clone();
             let claims = publish_loaded_lib_claims(cx, &loaded)?;
             cx.record_load_claims(committed, claims);
             Ok(committed)
@@ -147,6 +140,19 @@ impl Cx {
     /// versions, runs its [`Lib::load`](crate::library::Lib::load) against a
     /// load transaction, commits the result, and publishes its load claims.
     pub fn load_lib(&mut self, lib: &dyn Lib) -> Result<LibId> {
+        self.load_lib_checked(lib, |_| Ok(()))
+    }
+
+    /// [`Self::load_lib`] with a validation hook run on the stored committed
+    /// [`LoadedLib`], by reference, after the registry commit and BEFORE its load claims
+    /// are published. An `Err` from `check` is returned as [`Error::Lib`]; the registry
+    /// commit has already happened at that point, so callers that need an atomic refusal
+    /// run this inside a staged library state (as [`Self::activate_lib_checked`] does).
+    fn load_lib_checked(
+        &mut self,
+        lib: &dyn Lib,
+        check: impl FnOnce(&LoadedLib) -> std::result::Result<(), String>,
+    ) -> Result<LibId> {
         let manifest = lib.manifest();
         for capability in &manifest.capabilities {
             self.require(capability)?;
@@ -174,13 +180,14 @@ impl Cx {
             lib.load(&mut load_cx, &mut linker)?;
         }
         let lib_id = self.registry.commit_load(txn)?;
-        let loaded = self
+        let stored = self
             .registry
             .libs()
             .iter()
-            .find(|loaded| loaded.id == lib_id)
-            .cloned();
-        if let Some(loaded) = loaded {
+            .find(|loaded| loaded.id == lib_id);
+        if let Some(stored) = stored {
+            check(stored).map_err(Error::Lib)?;
+            let loaded = stored.clone();
             let claim_ids = publish_loaded_lib_claims(self, &loaded)?;
             self.record_load_claims(lib_id, claim_ids);
         }
