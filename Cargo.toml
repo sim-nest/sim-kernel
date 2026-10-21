@@ -31,7 +31,7 @@ unsafe_code = "forbid"
 test-support = []
 
 [dependencies]
-thiserror = "1"
+thiserror = "2"
 
 [lints]
 workspace = true
