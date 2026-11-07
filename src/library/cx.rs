@@ -1,8 +1,13 @@
+// SPDX-License-Identifier: MPL-2.0
+// This Source Code Form is subject to the terms of the Mozilla Public
+// License, v. 2.0. If a copy of the MPL was not distributed with this
+// file, You can obtain one at https://mozilla.org/MPL/2.0/.
+
 use crate::{
     LibId,
     env::Cx,
     error::{Error, Result},
-    library::{Lib, LibTarget, Version},
+    library::{Lib, LibTarget, LoadedLib, Version},
 };
 
 use super::claims::publish_loaded_lib_claims;
@@ -17,7 +22,42 @@ impl Cx {
     /// kernel-observable library state is staged; provider effects are outside
     /// this transaction because `Lib::load` receives only `LoadCx` and `Linker`.
     pub fn activate_lib(&mut self, expected: Option<LibId>, lib: &dyn Lib) -> Result<LibId> {
+        self.activate_lib_checked(expected, lib, |_| Ok(()), |_| Ok(()))
+    }
+
+    /// Same as [`activate_lib`](Self::activate_lib), but `check` runs against
+    /// the library's actual committed [`LoadedLib`] while that commit is
+    /// still staged, not yet visible outside this call.
+    ///
+    /// `lib.load` runs exactly once more here than in a caller's own
+    /// preflight probe of the same candidate (for example a shadow-context
+    /// dry run): nothing before this method's own staged commit can observe
+    /// what THIS specific invocation of `Lib::load` actually produces. A
+    /// hostile library can return a small, compliant result to a probe load
+    /// and a large or otherwise noncompliant one here. `check` is the only
+    /// place that result can be rejected before it is real: once this method
+    /// returns `Ok`, the activation has committed and a caller cannot safely
+    /// report failure without risking a partial effect. If `check` returns
+    /// `Err`, this call also returns `Err` and the live registry, datum
+    /// store, facts and load ledger are byte-for-byte what they were before
+    /// this call -- the same staged-then-conditionally-committed transaction
+    /// `activate_lib` itself already used, just with one more fallible step
+    /// before the commit.
+    ///
+    /// `check_manifest` is the FIRST thing that touches the candidate: the library's manifest
+    /// is sampled exactly once and `check_manifest` runs on that borrow before any registry
+    /// lookup, formatting, iteration or clone of it, so a hostile or stateful manifest is
+    /// refused before the kernel does any work proportional to its size. That same sampled
+    /// manifest is what is committed (there is no second `Lib::manifest()` call).
+    pub fn activate_lib_checked(
+        &mut self,
+        expected: Option<LibId>,
+        lib: &dyn Lib,
+        check_manifest: impl FnOnce(&crate::library::LibManifest) -> std::result::Result<(), String>,
+        check: impl FnOnce(&LoadedLib) -> std::result::Result<(), String>,
+    ) -> Result<LibId> {
         let manifest = lib.manifest();
+        check_manifest(&manifest).map_err(Error::Lib)?;
         let current = self.registry.lib(&manifest.id).cloned();
         match (expected, current.as_ref()) {
             (None, None) => {}
@@ -37,7 +77,12 @@ impl Cx {
 
         if expected.is_none() {
             let mut staged = self.library_state();
-            let id = self.with_library_state(&mut staged, |cx| cx.load_lib(lib))?;
+            // The check runs on the stored committed library BEFORE its claims are published
+            // (publication clones and iterates every export), inside the staged transaction.
+            let result: Result<LibId> = self.with_library_state(&mut staged, |cx| {
+                cx.load_manifest_checked(lib, manifest, check)
+            });
+            let id = result?;
             self.commit_library_state(staged);
             return Ok(id);
         }
@@ -87,13 +132,16 @@ impl Cx {
                 lib.load(&mut load_cx, &mut txn.linker())?;
             }
             let committed = cx.registry.commit_load(txn)?;
-            let loaded = cx
+            // Checked by reference on the stored committed library: no clone precedes the
+            // check. The clone below exists only to publish claims.
+            let stored = cx
                 .registry
                 .libs()
                 .iter()
                 .find(|item| item.id == committed)
-                .cloned()
                 .ok_or_else(|| Error::Lib("activated library missing after commit".to_owned()))?;
+            check(stored).map_err(Error::Lib)?;
+            let loaded = stored.clone();
             let claims = publish_loaded_lib_claims(cx, &loaded)?;
             cx.record_load_claims(committed, claims);
             Ok(committed)
@@ -106,7 +154,36 @@ impl Cx {
     /// versions, runs its [`Lib::load`](crate::library::Lib::load) against a
     /// load transaction, commits the result, and publishes its load claims.
     pub fn load_lib(&mut self, lib: &dyn Lib) -> Result<LibId> {
+        self.load_lib_checked(lib, |_| Ok(()), |_| Ok(()))
+    }
+
+    /// [`Self::load_lib`] with two validation hooks. `check_manifest` runs on the single
+    /// sampled manifest before anything else touches it; `check` runs on the stored
+    /// committed [`LoadedLib`], by reference, after the registry commit and BEFORE its load
+    /// claims are published. An `Err` from either is returned as [`Error::Lib`]. The registry
+    /// commit has already happened when `check` fails, so callers that need an atomic refusal
+    /// run this inside a staged library state (as [`Self::activate_lib_checked`] does) or in
+    /// a throwaway context.
+    fn load_lib_checked(
+        &mut self,
+        lib: &dyn Lib,
+        check_manifest: impl FnOnce(&crate::library::LibManifest) -> std::result::Result<(), String>,
+        check: impl FnOnce(&LoadedLib) -> std::result::Result<(), String>,
+    ) -> Result<LibId> {
         let manifest = lib.manifest();
+        check_manifest(&manifest).map_err(Error::Lib)?;
+        self.load_manifest_checked(lib, manifest, check)
+    }
+
+    /// The load path shared by [`Self::load_lib_checked`] and the activation transaction:
+    /// takes the ALREADY sampled (and already checked) manifest, so `Lib::manifest()` is
+    /// never called a second time.
+    fn load_manifest_checked(
+        &mut self,
+        lib: &dyn Lib,
+        manifest: crate::library::LibManifest,
+        check: impl FnOnce(&LoadedLib) -> std::result::Result<(), String>,
+    ) -> Result<LibId> {
         for capability in &manifest.capabilities {
             self.require(capability)?;
         }
@@ -133,16 +210,16 @@ impl Cx {
             lib.load(&mut load_cx, &mut linker)?;
         }
         let lib_id = self.registry.commit_load(txn)?;
-        let loaded = self
+        let stored = self
             .registry
             .libs()
             .iter()
             .find(|loaded| loaded.id == lib_id)
-            .cloned();
-        if let Some(loaded) = loaded {
-            let claim_ids = publish_loaded_lib_claims(self, &loaded)?;
-            self.record_load_claims(lib_id, claim_ids);
-        }
+            .ok_or_else(|| Error::Lib("loaded library missing after commit".to_owned()))?;
+        check(stored).map_err(Error::Lib)?;
+        let loaded = stored.clone();
+        let claim_ids = publish_loaded_lib_claims(self, &loaded)?;
+        self.record_load_claims(lib_id, claim_ids);
         Ok(lib_id)
     }
 
